@@ -8,47 +8,88 @@ With Marmalade, there is no central server providing a single source of truth. I
 
 A Marmalade jam session is made up of Marmalade audio generators which are sent and received by nodes on the Marmalade network, which are referred to as players. Each generator defines a function that can, while a player runs it, produce audio that matches the state of the jam on that player at that point. In addition, generators can register and set certain elements of that state, called tags. The state of the jam on a specific player consists of the sate of the local hardware (clock, sound levels, audio setup, network connectivity), the state of the network the jam is being jammed on (number of participating players and their stats), and the tags set by all the generators that the player is playing.
 
-- **Jam**: a single instance of a musical collaboration session, consisting of a growing collection of generators composed by the participating players.
-- **Player**: a single node participating in a jam, running the required software to handle composition, distribution and collection of generators, and the synchronized playback of the sounds they generate. Each player maintains its own version of the state of the jam.
-- **State**: the full history of the player, the network and the jam, which is subjective and local to each player. The state is used to determine which sounds to play, when and how.
-- **Generator**: the fundamental source of music in a jam - a generator defines a function that produces the right audio for the current state of the jam and sets appropriate tags that other generators can use to make decisions.
-- **Tags**: attributes of the state which are set by individual generators.
+- `Jam`: a single instance of a musical collaboration session, consisting of a growing collection of generators composed by the participating players.
+- `Player`: a single node participating in a jam, running the required software to handle composition, distribution and collection of generators, and the synchronized playback of the sounds they generate. Each player maintains its own version of the state of the jam.
+- `State`: the full history of the player, the network and the jam, which is subjective and local to each player. The state is used to determine which sounds to play, when and how.
+- `Generator`: the fundamental source of music in a jam - a generator defines a function that produces the right audio for the current state of the jam and sets appropriate tags that other generators can use to make decisions.
+- `Tags`: attributes of the state which are set by individual generators.
 
 For example, a player can start a jam by publishing a generator that plays a drum loop indefinitely, or for a specified duration, or one that plays the loop on every 10th second until the last player has left. This generator can also set and alternating "beat" tag in the state, allowing other generator to sync their audio to it.
 
 ## Network Protocol
 
 This is the protocol for communication between players. It allows for the following requests to be made (and fulfilled) by any player to any other player in the network:
-- **Players**: get a list of all players known to the queried player, in reverse chronological order.
-- **Generators**: get a list of all generators known to the queried player, in reverse chronological order.
-- **Generator <generator ID>**: get the generator with the specified ID.
-- **Run <generator ID> <instance ID>**: run the generator with the specified ID, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel).
+- `Players`: get a list of all players known to the queried player, in reverse chronological order. Each player has a unique name (per jam), an address, and a public key.
+- `Generators`: get a list of all generators known to the queried player, in reverse chronological order.
+- `Get <generator ID>`: get the generator with the specified ID.
+- `Play <generator ID> <instance ID> <signature> <public key>`: run the generator with the specified ID, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel).
+
+While the first three calls do not change the state of the jam, and can therefore be anonymous, the `Play` call has to be signed by the querying player and verified by the queried player. The `Play` call will, in addition to running the generator, download and deploy the generator if it is not locally present and add it to the list of known generators, and add the querying player to the list of players if it is not already there (along with the public key provided, which will be used to verify future `Play` calls).
+
+## Player Directory Structure
+
+```
+player/
+  general.conf
+  generators/
+    <jam name:player name:generator name>.tgz
+    ...
+  identities/
+    <player name>.conf
+    ...
+  jams/
+    <jam name>/
+      jam.conf
+      jam.log
+      jam.aof
+      players/
+        <player name>/
+          generators/
+            <generator name>/
+              <generator files>
+              ...
+            ...
+          player.conf
+        ...
+    ...
+```
+
+- `general.conf` basic initial configurations of the player, such as the player's name and address, and default identity and generator set.
+- `generators/` archive of all the generators that the player has ever known. Each generator has a unique ID made up of the jam's name (which is unique), the name of the player that published it (which is unique per jam), and the generator's name (which is uniuqe to that player in that jam). This directory is the single source of truth for the player's generators list.
+- `identities/` different identities that the player can assume, each with a unique name and configuration file. Identity configurations can clobber default values in `general.conf`.
+- `jams/` all the jams that the player has ever participated in, each with a unique name and directory.
+  - `jam.conf` jam specific configurations, can clobber values in `general.conf` and <player name>.conf.
+  - `jam.log` debug log of the jam.
+  - `jam.aof` append-only file that contains the state of the jam at any given time, as a series of events that have happened in the jam. This is the single source of truth for the state of the jam.
+  - `players/` contains all the players that have ever participated in the jam, each with a unique name and directory.
+    - `generators/` contains all the generators that the player ran during the jam, each with a unique name and directory extracted from the `generators/` directory.
+    - `player.conf` contains the player's name, address, and public key.
 
 ## Generators
 
+To keep generators as agnostic and versatile as possible, we define them as a directory in the player's filesystem, where the first file in the directory will be executed by the player's shell as a separate process with reduced privileges and chrooted to the generator's directory. The player will allow the generator read access to the jam's local state and the ability to produce audio and set tags.
+
 The generator lifecycle is as follows:
 1. A generator is composed by a player.
-2. The player requests all the players, self included, to run the generator, providing an arbitrary instance ID (current timestamp is a good choice).
-3. Every player that receives the request checks that if the generator is locally deployed, downloading it from the requesting player if it is not and deploying it.
+2. The player requests all the players, self included, to `Play` the generator, providing an arbitrary instance ID (current timestamp is a good choice).
+3. Every player that receives the request checks that if the generator is locally deployed, `Get`ting it from the requesting player if it is not and deploying it.
 4. Every player that receives the request checks if the generator has been run with the specified instance ID before, and if it has not, runs it.
 5. The generator instance keeps running until it stops itself, or until the jam ends.
 
-To keep generators as agnostic and versatile as possible, we define them as a directory in the player's filesystem, where the first file in the directory will be executed by the player's shell as a separate process with reduced privileges and chrooted to the generator's directory. The player will allow the generator read access to the jam's local state and the ability to produce audio and set tags.
-
 ### Read Access to the State
 
-Since the state is essentially a time series, we should give some thought as to how it is updated and queried. We will probably start with writing every state change event to a log file and providing read-only access to that file, but we should start considering off-the-shelf time series databases, possibly ones with compatible graphing tools so we can visualize the evolving state of the jam.
+Since the state is essentially a time series, we should give some thought as to how it is updated and queried. We can start with writing every state change event to an append only file and providing the generators with read-only access to that file, but maybe we should start with an off-the-shelf time series databases, possibly one with compatible graphing tools so we can visualize the evolving state of the jam which could be cool.
 
-[redis](https://redis.io/) seems to have excellent time series support which [grafana](https://grafana.com/) can visualize, it's fast as hell, setting it up and giving generators read access to it should be a breeze, and requiring that our generator developers learn how to query it is a small price to pay.
+[Redis](https://redis.io/) seems to have excellent time series support which [Grafana](https://grafana.com/) can visualize, it's fast as hell, setting it up and giving generators read access to it should be a breeze, and requiring that generator developers learn how to query it is a small price to pay.
 
 ### Writing Tags to the State
 
 This will be done via an API which the player provides to the generator, so the player stays in charge of implementing the state. We will start with a named pipe in the generator's directory, into which the generator can write JSON objects, with each object containing the full set of current tags and their values.
 
 The ID of the player and the generator will be embedded in the path of the tags, for easy querying and to prevent collisions. In addition, we suggest the following tags for semantic clarity:
-- **Composer**: a source of musical creation that composes sounds on a player. May be a person, a group, an algorithem, a set of wind-chimes or anything else that can operate a player.
-- **Track**: a musical stream within a jam, grouping together a set of sounds. Each player can produce multiple tracks, but a track is always produced by a single player, and typically by a single composer, representing a single "instrument".
-- **Context**: a named timeframe in the jam's schedule in which matching sounds are potentially played (e.g. 'buildup', 'drop', 'verse', 'chorus' or 'bar' - it makes sense to start jams with a basic rhythm generator defining some kind of an alternating 'beat'/'offbeat' context).
+- `Composer`: a source of musical creation that composes sounds on a player. May be a person, a group, an algorithem, a set of wind-chimes or anything else that can operate a player. Multiple composers can compose sounds on a single player, and a composer can compose sounds on multiple players. This tag is useful for tracking the source of a sound, and for attributing sounds to their creators.
+- `Track`: a musical stream within a jam, grouping together a set of sounds typically associated with a single player and a single composer and representing a single "instrument". This is useful for mixing and muting.
+- `Context`: a named timeframe in the jam's schedule in which matching sounds are potentially played (e.g. 'buildup', 'drop', 'verse', 'chorus' or 'bar' - it makes sense to start jams with a basic rhythm generator defining some kind of an alternating 'beat'/'offbeat' context).
 
 ### Producing Audio
 
@@ -58,6 +99,8 @@ The generator function should be able to produce any kind of audio, synthesized 
 - **[Supercollider](https://supercollider.github.io/)** is very impressive, seems to be very widely supported and something of an industry standard. Seems to require more setup.
 - **[cl-patterns](https://github.com/defaultxr/cl-patterns)** is built on top of Supercollider and does it cooler and lispier.
 - **[Sonic Pi](https://sonic-pi.net/)** is something else we can learn from.
+
+For all these options we can use the same named pipe that we use for writing the tags to send audio instructions to the player.
 
 ### Schedule
 
