@@ -43,7 +43,8 @@ player/
         <player name>/
           generators/
             <generator name>/
-              <generator files>
+              <instance ID>/
+                <generator files>
               ...
             ...
           player.lisp
@@ -57,8 +58,8 @@ player/
   - `config.lisp` jam specific configurations, can clobber values in the top level `config.lisp`.
   - `jam.log` debug log of the jam.
   - `jam.aof` append-only file that contains the state of the jam at any given time, as a series of events that have happened in the jam. This is the single source of truth for the state of the jam.
-  - `players/` contains all the players that have ever participated in the jam, each with a unique name and directory.
-    - `generators/` contains all the generators that the player ran during the jam, each with a unique name and directory extracted from the `generators/` directory.
+  - `players/` contains all the players that have ever participated in the jam, each in a unique directory with the player's name. This directory contains all the working directories of the generators during the jam, and can be deleted  once the jam is over (and potentially recreated from the `generators` archive directory using the log).
+    - `generators/` contains all the foreign player's generators that the local player ran during the jam, each in a unique directory with the generator's name, containing directories for all of its instances (each extracted in turn from the `generators/` directory).
     - `config.lisp` contains the foreign player's name, address, and public key. Will never clobber anything.
 
 ## Generators
@@ -67,10 +68,11 @@ To keep generators as agnostic and versatile as possible, we define them as a di
 
 The generator lifecycle is as follows:
 1. A generator is composed by a player.
-2. The player requests all the players, self included, to `Play` the generator, providing an arbitrary instance ID (current timestamp is a good choice).
-3. Every player that receives the request checks that if the generator is locally deployed, `Get`ting it from the requesting player if it is not and deploying it.
-4. Every player that receives the request checks if the generator has been run with the specified instance ID before, and if it has not, runs it.
-5. The generator instance keeps running until it stops itself, or until the jam ends.
+2. The player requests all the players, self included, to `play` the generator, providing an arbitrary instance ID (current timestamp is a good choice).
+3. Every player that receives the request checks that if the generator is locally known, `get`ting it from the requesting player if it is not.
+4. Every player that receives the request checks if the generator has been deployed with the specified instance ID before, and if it has not the player deploys and runs it.
+5. The generator instance reads the state of the jame and produces audio and sets tags accordingly.
+6. The generator instance keeps running until it stops itself, or until the jam ends.
 
 ### Read Access to the State
 
