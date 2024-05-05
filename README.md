@@ -19,27 +19,24 @@ For example, a player can start a jam by publishing a generator that plays a dru
 ## Network Protocol
 
 This is the protocol for communication between players. It allows for the following requests to be made (and fulfilled) by any player to any other player in the network:
-- `Players`: get a list of all players known to the queried player, in reverse chronological order. Each player has a unique name (per jam), an address, and a public key.
-- `Generators`: get a list of all generators known to the queried player, in reverse chronological order.
-- `Get <generator ID>`: get the generator with the specified ID.
-- `Play <generator ID> <instance ID> <signature> <public key>`: run the generator with the specified ID, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel).
+- `players`: get a list of all players known to the queried player, in reverse chronological order. Each player has a unique name (per jam), an address, and a public key.
+- `generators`: get a list of all generators known to the queried player, in reverse chronological order.
+- `generator <generator ID>`: get the generator with the specified ID.
+- `play <generator ID> <instance ID> <signature> <public key>`: run the generator with the specified ID, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel).
 
-While the first three calls do not change the state of the jam, and can therefore be anonymous, the `Play` call has to be signed by the querying player and verified by the queried player. The `Play` call will, in addition to running the generator, download and deploy the generator if it is not locally present and add it to the list of known generators, and add the querying player to the list of players if it is not already there (along with the public key provided, which will be used to verify future `Play` calls).
+While the first three calls do not change the state of the jam, and can therefore be anonymous, the `play` call has to be signed by the querying player and verified by the queried player. The `play` call will, in addition to running the generator, download and deploy the generator if it is not locally present and add it to the list of known generators, and add the querying player to the list of players if it is not already there (along with the public key provided, which will be used to verify future `play` calls).
 
 ## Player Directory Structure
 
 ```
 player/
-  general.conf
+  config.lisp
   generators/
     <jam name:player name:generator name>.tgz
     ...
-  identities/
-    <player name>.conf
-    ...
   jams/
     <jam name>/
-      jam.conf
+      jam.lisp
       jam.log
       jam.aof
       players/
@@ -49,21 +46,20 @@ player/
               <generator files>
               ...
             ...
-          player.conf
+          player.lisp
         ...
     ...
 ```
 
-- `general.conf` basic initial configurations of the player, such as the player's name and address, and default identity and generator set.
-- `generators/` archive of all the generators that the player has ever known. Each generator has a unique ID made up of the jam's name (which is unique), the name of the player that published it (which is unique per jam), and the generator's name (which is uniuqe to that player in that jam). This directory is the single source of truth for the player's generators list.
-- `identities/` different identities that the player can assume, each with a unique name and configuration file. Identity configurations can clobber default values in `general.conf`.
+- `config.lisp` basic initial configurations of the local player, such as the player's name, address, encryption keys and default generator set.
+- `generators/` archive of all the generators that the local player has ever known. Each generator has a unique ID made up of the jam's name (which is unique), the name of the player that published it (which is unique per jam), and the generator's name (which is uniuqe to that player in that jam). This directory is the single source of truth for the local player's generators list.
 - `jams/` all the jams that the player has ever participated in, each with a unique name and directory.
-  - `jam.conf` jam specific configurations, can clobber values in `general.conf` and <player name>.conf.
+  - `config.lisp` jam specific configurations, can clobber values in the top level `config.lisp`.
   - `jam.log` debug log of the jam.
   - `jam.aof` append-only file that contains the state of the jam at any given time, as a series of events that have happened in the jam. This is the single source of truth for the state of the jam.
   - `players/` contains all the players that have ever participated in the jam, each with a unique name and directory.
     - `generators/` contains all the generators that the player ran during the jam, each with a unique name and directory extracted from the `generators/` directory.
-    - `player.conf` contains the player's name, address, and public key.
+    - `config.lisp` contains the foreign player's name, address, and public key. Will never clobber anything.
 
 ## Generators
 
