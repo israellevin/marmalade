@@ -15,10 +15,8 @@
     (list
       (let ((player (make-hash-table :test 'equal)))
         (setf (gethash "name" player) (get-config :name))
-        (setf (gethash "address" player) (format nil "http://~a:~a" (get-config :host) (get-config :port))) player)
-      (let ((player (make-hash-table :test 'equal)))
-        (setf (gethash "name" player) "foo1")
-        (setf (gethash "address" player) "bar1") player)))
+        (setf (gethash "address" player) (format nil "http://~a:~a" (get-config :host) (get-config :port))) player)))
+
 (defun get-players (jam-name)
   "Returns the list of players."
   (declare (ignore jam-name))
@@ -26,6 +24,7 @@
   *players*)
 
 (defvar *generators* nil)
+
 (defun get-generators (jam-name)
   (declare (ignore jam-name))
   "Returns the list of generators."

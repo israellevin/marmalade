@@ -74,17 +74,18 @@ The generator lifecycle is as follows:
 5. The generator instance reads the state of the jame and produces audio and sets tags accordingly.
 6. The generator instance keeps running until it stops itself, or until the jam ends.
 
-### Read Access to the State
+### Access to the State
 
-Since the state is essentially a time series, we should give some thought as to how it is updated and queried. We can start with writing every state change event to an append only file and providing the generators with read-only access to that file, but maybe we should start with an off-the-shelf time series databases, possibly one with compatible graphing tools so we can visualize the evolving state of the jam which could be cool.
+We can store the state in the player's RAM and come up with a simple API over a named pipe or a domain socket for generators to access the state of the jam, which will be very fast indeed. However, the state is essentially a time series, and we want the generators to query it in a way that is both fast and expressive, so we decided to save us some time and use an off-the-shelf time series database.
 
-[Redis](https://redis.io/) seems to have excellent time series support which [Grafana](https://grafana.com/) can visualize, it's fast as hell, setting it up and giving generators read access to it should be a breeze, and requiring that generator developers learn how to query it is a small price to pay.
+[Redis](https://redis.io/) seems to have excellent time series support, it's fast as hell, and setting it up and granting generators read access to the state should be a breeze. In addition, it's really easy to connect it to something like [Grafana](https://grafana.com/) which can visualize the evolving state of the jam, which could be awesome.
 
-### Writing Tags to the State
 
-This will be done via an API which the player provides to the generator, so the player stays in charge of implementing the state. We will start with a named pipe in the generator's directory, into which the generator can write JSON objects, with each object containing the full set of current tags and their values.
+#### Writing Tags
 
-The ID of the player and the generator will be embedded in the path of the tags, for easy querying and to prevent collisions. In addition, we suggest the following tags for semantic clarity:
+We give each generator instance write access to its own namespace in the state, in which tags can be written as a time series. Theoretically, the player can give a generator instance permissions to set tags in other areas of the state, which could create some sort of meta-generator operations.
+
+The ID of the player and the generator instance will be embedded in the path of the tags, for easy querying and to prevent collisions. In addition, we suggest the following tags for semantic clarity:
 - `Composer`: a source of musical creation that composes sounds on a player. May be a person, a group, an algorithem, a set of wind-chimes or anything else that can operate a player. Multiple composers can compose sounds on a single player, and a composer can compose sounds on multiple players. This tag is useful for tracking the source of a sound, and for attributing sounds to their creators.
 - `Track`: a musical stream within a jam, grouping together a set of sounds typically associated with a single player and a single composer and representing a single "instrument". This is useful for mixing and muting.
 - `Context`: a named timeframe in the jam's schedule in which matching sounds are potentially played (e.g. 'buildup', 'drop', 'verse', 'chorus' or 'bar' - it makes sense to start jams with a basic rhythm generator defining some kind of an alternating 'beat'/'offbeat' context).
@@ -98,8 +99,14 @@ The generator function should be able to produce any kind of audio, synthesized 
 - **[cl-patterns](https://github.com/defaultxr/cl-patterns)** is built on top of Supercollider and does it cooler and lispier.
 - **[Sonic Pi](https://sonic-pi.net/)** is something else we can learn from.
 
-For all these options we can use the same named pipe that we use for writing the tags to send audio instructions to the player.
+For all these options we can use redis pub-sub to deliver the musical notation from generator to player. We can probably use redis's expiration mechanism to avoid playing sounds if the player hasn't gotten around to playing them in time.
+
+## Thoughts
 
 ### Schedule
 
 Maybe we create an evolving potential structure of a jam, represented as a directed graph of contexts (or tag collections). The schedule outlines the temporal structure of the jam without specifying the musical content. In many cases it makes sense to start jams with a common schedule for all players, outlining the basic structure of the jam, but as the schedule evolves over time it may end up being different for different players, and it may be interesting to start jams with different schedules for different players.
+
+### Events
+
+Maybe we want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state.
