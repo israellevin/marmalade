@@ -35,9 +35,9 @@
   *generators*)
 
 (defun get-generator (generator-id)
-  "Returns the generator with the specified ID as a tgz file."
-  ;; TODO Should actually get the file.
-  (format nil "Generator ~A" generator-id))
+  "Returns the path to the tgz file containing the generator with the specified ID."
+  (let* ((path (format nil "/root/src/marmalade/generators/~A.tgz" generator-id)))
+    (cond ((uiop:file-exists-p path) path) (t nil))))
 
 (defun play-generator (jam-name player-name generator-name instance-id signature pubkey address)
   "Plays the generator with the specified ID."
@@ -52,9 +52,11 @@
 
 ;;; HTTP server functions.
 
+(defvar *network-server* (s-http-server:make-s-http-server :port (get-config :port)))
+
 (defun text-response (http-request response-stream content
                                    &optional (status 200) (response-string "OK") (mime "text/plain"))
-  "Generate and write a standard HTTP response."
+  "Generate and write an HTTP text response."
   (when response-stream
     (s-http-server:write-http-response-status-line response-stream status response-string
                                                    (s-http-server:get-http-version http-request))
@@ -70,11 +72,11 @@
 
 (defun json-response (http-request response-stream content
                                    &optional (status 200) (response-string "OK") (mime "application/json"))
-  "Generate and write a standard HTTP response."
+  "Generate and write an HTTP JSON response."
   (text-response http-request response-stream (com.inuoe.jzon:stringify content) status response-string mime))
 
-(defun network-request-handler (s-http-server handler http-request response-stream)
-  "Handles requests from other players."
+(defun network-request-handler (server handler http-request response-stream)
+  "Handles requests."
   (let* ((request-path (s-http-server:get-path http-request))
          (path-parts (split-sequence:split-sequence #\/ request-path))
          (endpoint-name (second path-parts))
@@ -82,17 +84,20 @@
                         (string-upcase (format nil "~A-~A" (s-http-server:get-method http-request) endpoint-name))
                         :keyword)))
     (case endpoint-id
-      (:get-stats (s-http-server:s-http-server-handler s-http-server handler http-request response-stream))
+      (:get-stats (s-http-server:s-http-server-handler server handler http-request response-stream))
       (:get-players (json-response http-request response-stream (get-players (get-config :name))))
       (:get-generators (json-response http-request response-stream (get-generators (get-config :name))))
       (:get-generator
-        (let ((generator-id (third path-parts)))
-          (s-http-server:standard-http-html-message-response
-            http-request response-stream "Not Downloading Generator" (format nil "~A" generator-id))))
+        (let* ((generator-id (third path-parts))
+               (file-path (get-generator generator-id)))
+          (if file-path (s-http-server::host-static-resource
+                          http-request response-stream file-path :expires-max-age 0)
+              (s-http-server:standard-http-html-error-response
+                http-request response-stream 404
+                "not found" (format nil "generator ~A was not found" generator-id)))))
       (:post-play (text-response http-request response-stream "not yet" 501 "Not Implemented"))
       (t (s-http-server:standard-http-html-error-response
-           http-request response-stream 404 "not found" "The requested resource was not found.")))))
+           http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path))))))
 
-(defvar *network-server* (s-http-server:make-s-http-server :port (get-config :port)))
 (s-http-server:register-context-handler *network-server* "/" 'network-request-handler)
 (s-http-server:start-server *network-server*)
