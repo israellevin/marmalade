@@ -4,10 +4,14 @@
 
 ;;; Data access functions.
 
+(defvar *cwd* (uiop/os:getcwd))
+(defvar *config-path* (format nil "~A/config.lisp" *cwd*))
+(defvar *generators-path* (format nil "~A/generators" *cwd*))
+
 (defun get-config (key &optional (default nil))
   "Returns the value of the specified configuration key."
   (handler-case
-    (let* ((config (uiop:read-file-form "/root/src/marmalade/config.lisp"))
+    (let* ((config (uiop:read-file-form *config-path*))
            (pair (assoc key config)))
       (if pair
           (cdr pair)
@@ -36,11 +40,11 @@
               (list
                 :id generator-id :player player-name :name generator-name
                 :url (format nil "http://~A:~A/generator/~A" (get-config :host) (get-config :port) generator-id))))
-          (uiop:directory-files (format nil "/root/src/marmalade/generators/~A:*.tgz" jam-name))))
+          (uiop:directory-files (format nil "~A/~A:*.tgz" *generators-path* jam-name))))
 
 (defun get-generator (generator-id)
   "Returns the path to the tgz file containing the generator with the specified ID."
-  (let* ((path (format nil "/root/src/marmalade/generators/~A.tgz" generator-id)))
+  (let* ((path (format nil "~A/~A.tgz" *generators-path* generator-id)))
     (cond ((uiop:file-exists-p path) path) (t nil))))
 
 (defun play-generator (jam-name player-name generator-name instance-id signature pubkey address)
