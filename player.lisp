@@ -1,6 +1,6 @@
 ;;;; Marmalade player.
 
-(ql:quickload '("s-http-server" "split-sequence" "uiop" "com.inuoe.jzon"))
+(ql:quickload '("com.inuoe.jzon" "quri" "s-http-server" "split-sequence" "uiop"))
 
 ;;; Data access functions.
 
@@ -14,25 +14,29 @@
           (if default default (error "Key ~A not found in configuration." key))))
     (error () default)))
 
-(defvar *players*
-  (list
-    (let ((player (make-hash-table :test 'equal)))
-      (setf (gethash "name" player) (get-config :name))
-      (setf (gethash "address" player) (format nil "http://~a:~a" (get-config :host) (get-config :port))) player)))
+(defvar *players* (list (list :name (get-config :name) :address (
+                                                                 format nil "http://~A:~A"
+                                                                 (get-config :host) (get-config :port)))))
 
 (defun get-players (jam-name)
   "Returns the list of players."
   (declare (ignore jam-name))
-  ;; TODO Should scan `generators` and individual players directories, or maybe just get it from redis.
+  ;; TODO Should get this from redis.
   *players*)
 
-(defvar *generators* nil)
-
 (defun get-generators (jam-name)
-  (declare (ignore jam-name))
-  "Returns the list of generators."
-  ;; TODO Should scan `generators` directory, or maybe just get it from redis.
-  *generators*)
+  "Scans the generators directory and returns the list of generators."
+  (mapcar (lambda (generator)
+            (let*
+              ((generator-file-name (file-namestring generator))
+               (generator-id (first (split-sequence:split-sequence #\. generator-file-name)))
+               (generator-parts (split-sequence:split-sequence #\: generator-id))
+               (player-name (second generator-parts))
+               (generator-name (third generator-parts)))
+              (list
+                :id generator-id :player player-name :name generator-name
+                :url (format nil "http://~A:~A/generator/~A" (get-config :host) (get-config :port) generator-id))))
+          (uiop:directory-files (format nil "/root/src/marmalade/generators/~A:*.tgz" jam-name))))
 
 (defun get-generator (generator-id)
   "Returns the path to the tgz file containing the generator with the specified ID."
@@ -52,8 +56,6 @@
 
 ;;; HTTP server functions.
 
-(defvar *network-server* (s-http-server:make-s-http-server :port (get-config :port)))
-
 (defun text-response (http-request response-stream content
                                    &optional (status 200) (response-string "OK") (mime "text/plain"))
   "Generate and write an HTTP text response."
@@ -70,14 +72,19 @@
     (write-string content response-stream)
     (length content)))
 
-(defun json-response (http-request response-stream content
-                                   &optional (status 200) (response-string "OK") (mime "application/json"))
-  "Generate and write an HTTP JSON response."
-  (text-response http-request response-stream (com.inuoe.jzon:stringify content) status response-string mime))
+(defun plists-response (http-request response-stream plists
+                                     &optional (status 200) (response-string "OK") (mime "application/json"))
+  "Generate and write an HTTP JSON response representing a list of plists."
+  (let* ((json-objects (mapcar
+                         (lambda (plist)
+                           (let ((json-object (make-hash-table :test 'equal)))
+                             (loop for (key value) on plist by #'cddr
+                                   do (setf (gethash key json-object) value)) json-object)) plists)))
+    (text-response http-request response-stream (com.inuoe.jzon:stringify json-objects) status response-string mime)))
 
 (defun network-request-handler (server handler http-request response-stream)
   "Handles requests."
-  (let* ((request-path (s-http-server:get-path http-request))
+  (let* ((request-path (quri:url-decode (s-http-server:get-path http-request)))
          (path-parts (split-sequence:split-sequence #\/ request-path))
          (endpoint-name (second path-parts))
          (endpoint-id (intern
@@ -85,8 +92,8 @@
                         :keyword)))
     (case endpoint-id
       (:get-stats (s-http-server:s-http-server-handler server handler http-request response-stream))
-      (:get-players (json-response http-request response-stream (get-players (get-config :name))))
-      (:get-generators (json-response http-request response-stream (get-generators (get-config :name))))
+      (:get-players (plists-response http-request response-stream (get-players (get-config :current-jam))))
+      (:get-generators (plists-response http-request response-stream (get-generators (get-config :current-jam))))
       (:get-generator
         (let* ((generator-id (third path-parts))
                (file-path (get-generator generator-id)))
@@ -99,5 +106,6 @@
       (t (s-http-server:standard-http-html-error-response
            http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path))))))
 
+(defvar *network-server* (s-http-server:make-s-http-server :port (get-config :port)))
 (s-http-server:register-context-handler *network-server* "/" 'network-request-handler)
 (s-http-server:start-server *network-server*)
