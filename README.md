@@ -110,3 +110,20 @@ Maybe we create an evolving potential structure of a jam, represented as a direc
 ### Events
 
 Maybe we want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state.
+
+## Running the Player
+
+1. Install [SBCL](http://www.sbcl.org/)
+2. Install [Quicklisp](https://www.quicklisp.org/beta/)
+    1. Download the `quicklisp.lisp` file from the Quicklisp website
+    2. Run `sbcl --load <full path to quicklisp.lisp>`
+    3. Optionally, set the quicklisp home directory with `(setf quicklisp-quickstart::*home* "<full path to quicklisp home>")`
+    4. Run `(quicklisp-quickstart:install)`
+    5. Run `(ql:add-to-init-file)`
+3. Clone this repository
+4. Edit `config.lisp` to your liking
+5. Create a `generators` directory in the player directory and fill it with generators to your liking
+    1. Each generator should be a `tgz` file named `<jam name>:<player name>:<generator name>.tgz` and containing a directory in which the first executable file is the generator's entry point
+5. Run `sbcl --load player.lisp`
+
+Note: SBCL doesn't use readline by default, so you might want to install `rlwrap` or `rlfe` and prepend all `sbcl` calls with `rlfe -h ~/.sbcl_history`.
