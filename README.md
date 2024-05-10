@@ -29,14 +29,14 @@ While the first three calls do not change the state of the jam, and can therefor
 ## Player Directory Structure
 
 ```
-player/
+cwd/
   config.lisp
   generators/
     <jam name:player name:generator name>.tgz
     ...
   jams/
     <jam name>/
-      jam.lisp
+      config.lisp
       jam.log
       jam.aof
       players/
@@ -47,7 +47,7 @@ player/
                 <generator files>
               ...
             ...
-          player.lisp
+          config.lisp
         ...
     ...
 ```
@@ -124,6 +124,6 @@ Maybe we want to allow generators to subscribe to events in the jam, such as the
 4. Edit `config.lisp` to your liking
 5. Create a `generators` directory in the player directory and fill it with generators to your liking
     1. Each generator should be a `tgz` file named `<jam name>:<player name>:<generator name>.tgz` and containing a directory in which the first executable file is the generator's entry point
-5. Run `sbcl --load player.lisp`
+5. Run `sbcl --load src/run.lisp`
 
 Note: SBCL doesn't use readline by default, so you might want to install `rlwrap` or `rlfe` and prepend all `sbcl` calls with `rlfe -h ~/.sbcl_history`.
