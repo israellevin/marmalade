@@ -2,7 +2,6 @@
 
 (ql:quickload '("com.inuoe.jzon" "quri" "s-http-server"))
 (require 'data-access "src/data-access.lisp")
-(require 'utils "src/utils.lisp")
 
 (defun text-response (content http-request response-stream
                               &key (status 200) (response-string "OK") (mime "text/plain"))
@@ -34,15 +33,15 @@
 (defun network-request-handler (server handler http-request response-stream)
   "Handles requests."
   (let* ((request-path (quri:url-decode (s-http-server:get-path http-request)))
-         (path-parts (split #\/ request-path))
+         (path-parts (split-sequence:split-sequence #\/ request-path))
          (endpoint-name (second path-parts))
          (endpoint-id (intern
                         (string-upcase (format nil "~A-~A" (s-http-server:get-method http-request) endpoint-name))
                         :keyword)))
     (case endpoint-id
       (:get-stats (s-http-server:s-http-server-handler server handler http-request response-stream))
-      (:get-players (plists-response (get-players (get-config :current-jam)) http-request response-stream))
-      (:get-generators (plists-response (get-generators (get-config :current-jam)) http-request response-stream))
+      (:get-players (plists-response (get-players *current-jam*) http-request response-stream))
+      (:get-generators (plists-response (get-generators *current-jam*) http-request response-stream))
       (:get-generator
         (let* ((generator-id (third path-parts))
                (file-path (get-generator generator-id)))

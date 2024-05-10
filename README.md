@@ -38,7 +38,6 @@ cwd/
     <jam name>/
       config.lisp
       jam.log
-      jam.aof
       players/
         <player name>/
           generators/
@@ -49,6 +48,8 @@ cwd/
             ...
           config.lisp
         ...
+      redis/
+        <redis files>
     ...
 ```
 
@@ -61,6 +62,7 @@ cwd/
   - `players/` contains all the players that have ever participated in the jam, each in a unique directory with the player's name. This directory contains all the working directories of the generators during the jam, and can be deleted  once the jam is over (and potentially recreated from the `generators` archive directory using the log).
     - `generators/` contains all the foreign player's generators that the local player ran during the jam, each in a unique directory with the generator's name, containing directories for all of its instances (each extracted in turn from the `generators/` directory).
     - `config.lisp` contains the foreign player's name, address, and public key. Will never clobber anything.
+  - `redis/` contains the redis database files for the jam.
 
 ## Generators
 
@@ -124,6 +126,6 @@ Maybe we want to allow generators to subscribe to events in the jam, such as the
 4. Edit `config.lisp` to your liking
 5. Create a `generators` directory in the player directory and fill it with generators to your liking
     1. Each generator should be a `tgz` file named `<jam name>:<player name>:<generator name>.tgz` and containing a directory in which the first executable file is the generator's entry point
-5. Run `sbcl --load src/run.lisp`
+6. Run `sbcl --load src/run.lisp`
 
 Note: SBCL doesn't use readline by default, so you might want to install `rlwrap` or `rlfe` and prepend all `sbcl` calls with `rlfe -h ~/.sbcl_history`.

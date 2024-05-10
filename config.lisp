@@ -1,8 +1,8 @@
 (
- (:name . "Marmalade player")
+ (:name . "me")
  (:host . "localhost")
  (:port . 2468)
- (:pubkey . "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7h1")
- (:privkey . "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7h1")
- (:current-jam . "Marmalade jam")
+ (:pubkey-path . "~/.ssh/id_rsa.pub")
+ (:privkey-path . "~/.ssh/id_rsa")
+ (:redis-command . "redis-server")
 )
