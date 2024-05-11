@@ -3,9 +3,10 @@
 (ql:quickload '("cl-redis" "split-sequence" "uiop"))
 
 (defvar *cwd* (uiop/os:getcwd))
-(defvar *config-path* (format nil "~A/config.lisp" *cwd*))
-(defvar *generators-path* (format nil "~A/generators" *cwd*))
-(defvar *jams-path* (format nil "~A/jams" *cwd*))
+(defvar *config-path* (format nil "~Aconfig.lisp" *cwd*))
+(defvar *generators-path* (format nil "~Agenerators/" *cwd*))
+(defvar *jams-path* (format nil "~Ajams/" *cwd*))
+(defvar *players-path* (format nil "~Aplayers/" *cwd*))
 (defvar *current-jam* nil)
 
 (defun get-config (key &optional (default nil))
@@ -20,45 +21,54 @@
 
 (defun connect (jam-name)
   "Connects to a (potentially new) jam with the specified name."
-  (let ((jam-path (format nil "~A/~A/" *jams-path* jam-name)))
+  (let ((jam-path (format nil "~A~A/" *jams-path* jam-name)))
     (ensure-directories-exist jam-path)
     (uiop:launch-program (format nil "~A --dir ~A --save '' --appendonly yes --appenddirname redis"
-                              (get-config :redis-command) jam-path))
+                                 (get-config :redis-command) jam-path))
     (setf *current-jam* jam-name))
-    (sleep 0.1)
-    (redis:connect))
+  (sleep 0.1)
+  (redis:connect))
 
 (defun disconnect ()
   "Disconnects from the current jam."
   (red:shutdown)
   (redis:disconnect))
 
-(defun get-players (jam-name)
-  "Returns the list of players."
-  (unless *current-jam* (error "Not connected to a jam."))
-  ;; TODO Should get this from scanning the jam directory, or maybe from redis.
-  (list (list :name (get-config :name) :address (
-                                                 format nil "http://~A:~A"
-                                                 (get-config :host) (get-config :port)))))
+(defun directory-map (file-function path)
+  "Returns a map of file-function over the files in path, in reverse chronological order."
+  (mapcar
+    (lambda (file-path)
+      (let*
+        ((file-name (file-namestring file-path))
+         (file-name-parts (split-sequence:split-sequence #\. file-name))
+         (file-basename (first file-name-parts))
+         (file-extension (second file-name-parts)))
+        (funcall file-function `(:path ,file-path :basename ,file-basename :extension ,file-extension))))
+    (sort (uiop:directory-files path) #'> :key #'file-write-date)))
 
-(defun get-generators (jam-name)
+(defun get-generators ()
   "Scans the generators directory and returns the list of generators."
-  (mapcar (lambda (generator)
-            (let*
-              ((generator-file-name (file-namestring generator))
-               (generator-id (first (split-sequence:split-sequence #\. generator-file-name)))
-               (generator-parts (split-sequence:split-sequence #\: generator-id))
-               (player-name (second generator-parts))
-               (generator-name (third generator-parts)))
-              (list
-                :id generator-id :player player-name :name generator-name
-                :url (format nil "http://~A:~A/generator/~A" (get-config :host) (get-config :port) generator-id))))
-          (uiop:directory-files (format nil "~A/~A:*.tgz" *generators-path* jam-name))))
+  (directory-map
+    (lambda (file-properties)
+      (if (string= (getf file-properties :extension) "tgz")
+          (let*
+            ((generator-id (getf file-properties :basename))
+             (generator-parts (split-sequence:split-sequence #\: generator-id))
+             (player-name (first generator-parts))
+             (generator-name (second generator-parts)))
+            (list :id generator-id :player player-name :name generator-name)) nil)) *generators-path*))
 
 (defun get-generator (generator-id)
   "Returns the path to the tgz file containing the generator with the specified ID."
-  (let* ((path (format nil "~A/~A.tgz" *generators-path* generator-id)))
+  (let* ((path (format nil "~A~A.tgz" *generators-path* generator-id)))
     (cond ((uiop:file-exists-p path) path) (t nil))))
+
+(defun get-players ()
+  "Returns the list of players."
+  (directory-map
+    (lambda (file-properties)
+      (if (string= (getf file-properties :extension) "lisp")
+          (uiop:read-file-form (getf file-properties :path)))) *players-path*))
 
 (defun play-generator (jam-name player-name generator-name instance-id signature pubkey address)
   "Plays the generator with the specified ID."

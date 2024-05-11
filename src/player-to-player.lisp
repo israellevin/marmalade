@@ -40,8 +40,8 @@
                         :keyword)))
     (case endpoint-id
       (:get-stats (s-http-server:s-http-server-handler server handler http-request response-stream))
-      (:get-players (plists-response (get-players *current-jam*) http-request response-stream))
-      (:get-generators (plists-response (get-generators *current-jam*) http-request response-stream))
+      (:get-players (plists-response (get-players) http-request response-stream))
+      (:get-generators (plists-response (get-generators) http-request response-stream))
       (:get-generator
         (let* ((generator-id (third path-parts))
                (file-path (get-generator generator-id)))
