@@ -9,8 +9,8 @@ With Marmalade, there is no central server acting as an objective source of trut
 A Marmalade jam session is made up of Marmalade audio generators which are sent and received by nodes on the Marmalade network, which are referred to as players. Each generator defines a function that can, while a player runs it, produce audio that matches the state of the jam on that player at that point. In addition, generators can register and set certain elements of that state, called tags. The state of the jam on a specific player consists of the sate of the local hardware (clock, sound levels, audio setup, network connectivity), the state of the network the jam is being jammed on (number of participating players and their stats), and the tags set by all the generators that the player is playing.
 
 - `Jam`: a single instance of a musical collaboration session, consisting of a growing collection of generators composed by the participating players. Jams are identified by a name that is unique to all the players participating in the jam.
-- `Player`: a single node participating in a jam, running the required software to handle composition, distribution and collection of generators, and the synchronized playback of the sounds they generate. Each player maintains its own version of the state of the jam.
-- `State`: the full history of the player, the network and the jam, which is subjective and local to each player. The state is used to determine which sounds to play, when and how. Players are identified by a public key.
+- `Player`: a single node participating in a jam, running the required software to handle composition, distribution and collection of generators, and the synchronized playback of the sounds they generate. Each player maintains its own version of the state of the jam. Players are identified by the first 8 characters of a SHA-256 hash of their public key.
+- `State`: the full history of the player, the network and the jam, which is subjective and local to each player. The state is used to determine which sounds to play, when and how.
 D- `Generator`: the fundamental source of music in a jam - a generator defines a function that produces the right audio for the current state of the jam and sets appropriate tags that other generators can use to make decisions. Generators are identified by a unique ID in the form `<player ID>:<generator name>`, where the name of the generator is unique to that player.
 - `Tags`: attributes of the state which are set by individual generators.
 
@@ -21,7 +21,7 @@ For example, a player can start a jam by publishing a generator that plays a dru
 This is the protocol for communication between players. It allows for the following requests to be made (and fulfilled) by any player to any other player in the network:
 - `generators`: get a simple list of all generator IDs known to the queried player, in reverse chronological order.
 - `generator <generator ID>`: get the generator with the specified ID as an archive file.
-- `players`: get a list of all players known to the queried player, in reverse chronological order, containing, for each player, the public key identifying the player, their latest known addresses and some metadata such as a list of jams they have participated in and generators they composed and when they were last seen.
+- `players`: get a list of all players known to the queried player, in reverse chronological order, containing, for each player, the public key identifying the player, their latest known addresses, and when they were last seen.
 - `play <generator ID> <instance ID> <signature> <public key>`: run the generator with the specified ID, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel).
 
 While the first three calls do not change the state of the jam and can therefore be anonymous, the `play` call will, in addition to running the generator, download and deploy the generator if it is not locally present and add it to the list of known generators, and add the querying player to the list of players if it is not already there (along with the public key provided, which will be used to identify the player from that point on). It therefore has to be signed by the querying player and verified by the queried player.
@@ -64,17 +64,17 @@ While the first three calls do not change the state of the jam and can therefore
     - `redis/`: a redis persistence directory for the jam.
       - `<redis files>`: the redis aof and rdb files for the jam. This is the single source of truth for the local state of the jam.
 - `players/` contains information about all the players the local player has ever known.
-  - `<player ID>.lisp` contains the player's address and public key, as well as some metadata about the player.
+  - `<player ID>.lisp` contains the player's public key, address, and last seen time.
 
 ## Generators
 
-To keep generators as agnostic and versatile as possible, we define them as a directory in the player's filesystem, where the first file in the directory will be executed by the player's shell as a separate process with reduced privileges and chrooted to the generator's directory. The player will allow the generator read access to the jam's local state and the ability to produce audio and set tags.
+Generators are implemented as a directory in which the first executable file is the generator's entry point. A player wishing to play a generator will deploy it in a directory in the player's filesystem and execute the first executable in a separate process. This means that, at the moment, generators have to be in a format that is executable by the player's shell, and that they can completely fuck up the player's local environment. The first issue can be mitigated by running the generator with reduced privileges, chrooted to the generator's working directory, with CPU, RAM and FS quotas in place, and given access only to necessary resources (redis port). In the future we will probably run generators on a virtual machine, making our generators cross-platform.
 
 The generator lifecycle is as follows:
 1. A generator is composed by a player.
 2. The player requests all the players, self included, to `play` the generator, providing an arbitrary instance ID (current timestamp is a good choice).
 3. Every player that receives the request checks that if the generator is locally known, `get`ting it from the requesting player if it is not.
-4. Every player that receives the request checks if the generator has been deployed with the specified instance ID before, and if it has not the player deploys and runs it.
+4. Every player that receives the request deploys and runs the generator in it's working directory, `<jam name>/<player ID>/<generator name>/<instance ID>/`, unless that directory already exists (which means the generator was already `play`ed with this instance ID).
 5. The generator instance reads the state of the jame and produces audio and sets tags accordingly.
 6. The generator instance keeps running until it stops itself, or until the jam ends.
 
@@ -114,19 +114,25 @@ Maybe we create an evolving potential structure of a jam, represented as a direc
 
 Maybe we want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state.
 
-## Running the Player
+## Requirements
 
-1. Install [SBCL](http://www.sbcl.org/)
-2. Install [Quicklisp](https://www.quicklisp.org/beta/)
-    1. Download the `quicklisp.lisp` file from the Quicklisp website
-    2. Run `sbcl --load <full path to quicklisp.lisp>`
-    3. Optionally, set the quicklisp home directory with `(setf quicklisp-quickstart::*home* "<full path to quicklisp home>")`
-    4. Run `(quicklisp-quickstart:install)`
-    5. Run `(ql:add-to-init-file)`
-3. Clone this repository
-4. Edit `config.lisp` to your liking
-5. Create a `generators` directory in the player directory and fill it with generators to your liking
-    1. Each generator should be a `tgz` file named `<jam name>:<player name>:<generator name>.tgz` and containing a directory in which the first executable file is the generator's entry point
-6. Run `sbcl --load src/run.lisp`
+- A linux machine with a sound card and a network connection
+- A posix shell with curl tar and gzip
+- [SBCL](http://www.sbcl.org/)
+- [Quicklisp](https://www.quicklisp.org/beta/)
+  1. Download the `quicklisp.lisp` file from the Quicklisp website
+  2. Run `sbcl --load <full path to quicklisp.lisp>`
+  3. Optionally, set the quicklisp home directory with `(setf quicklisp-quickstart::*home* "<full path to quicklisp home>")`
+  4. Run `(quicklisp-quickstart:install)`
+  5. Run `(ql:add-to-init-file)`
+
+## Running Marmalade
+
+1. Clone this repository
+2. Edit `config.lisp` to your liking
+3. Create a `generators` directory in the player directory and fill it with generators to your liking
+    1. Each generator should be a `tgz` file named `<player ID>:<generator name>.tgz` and containing a directory in which the first executable file is the generator's entry point
+4. Run `sbcl --load src/run.lisp` (or `rlfe -h ~/.sbcl_history --load src/run.lisp` if you want readline support)
+5. In the REPL run `(start-jam "<jam name>")`
 
 Note: SBCL doesn't use readline by default, so you might want to install `rlwrap` or `rlfe` and prepend all `sbcl` calls with `rlfe -h ~/.sbcl_history`.

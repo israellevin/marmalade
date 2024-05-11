@@ -44,7 +44,7 @@
       (:get-generators (plists-response (get-generators) http-request response-stream))
       (:get-generator
         (let* ((generator-id (third path-parts))
-               (file-path (get-generator generator-id)))
+               (file-path (get-generator-archive-path generator-id)))
           (if file-path (s-http-server::host-static-resource
                           http-request response-stream file-path :expires-max-age 0)
               (s-http-server:standard-http-html-error-response
