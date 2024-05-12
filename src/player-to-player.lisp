@@ -1,8 +1,5 @@
 ;;;; HTTP server for player to player communication on a Marmalade network.
 
-(ql:quickload '("com.inuoe.jzon" "quri" "s-http-server"))
-(require 'data-access "src/data-access.lisp")
-
 (defun text-response (content http-request response-stream
                               &key (status 200) (response-string "OK") (mime "text/plain"))
   "Generate and write an HTTP text response."
@@ -50,12 +47,26 @@
               (s-http-server:standard-http-html-error-response
                 http-request response-stream 404
                 "not found" (format nil "generator ~A was not found" generator-id)))))
-      (:post-play (text-response "not yet" http-request response-stream :status 501 :response-string "Not Implemented"))
+      (:post-play (let* ((jam-name (third path-parts))
+                         (generator-name (fourth path-parts))
+                         (instance-id (fifth path-parts))
+                         (headers (s-http-server:get-headers http-request))
+                         (signature (getf headers :signature))
+                         (pubkey (getf headers :pubkey))
+                         (address (getf headers :address)))
+                    (format t "playing generator ~A instance ~A signature ~A pubkey ~A~%" generator-name instance-id signature pubkey)
+                    (if (play-generator jam-name generator-name instance-id signature pubkey address)
+                        (text-response "OK" http-request response-stream)
+                        (s-http-server:standard-http-html-error-response
+                          http-request response-stream 400 "bad request" "failed to play generator"))
+                    ))
+      (:default (s-http-server:standard-http-html-error-response
+                  http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path)))
       (t (s-http-server:standard-http-html-error-response
            http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path))))))
 
 (defvar *network-server* (s-http-server:make-s-http-server :port (get-config :port)))
 (s-http-server:register-context-handler *network-server* "/" 'network-request-handler)
-(s-http-server:start-server *network-server*)
 
-(provide 'player-to-player)
+(defun start-p2p-server () (s-http-server:start-server *network-server*))
+(defun stop-p2p-server () (s-http-server:stop-server *network-server*))
