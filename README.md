@@ -22,7 +22,7 @@ This is the protocol for communication between players. It allows for the follow
 - `generators`: get a simple list of all generator IDs known to the queried player, in reverse chronological order.
 - `generator <generator ID>`: get the generator with the specified ID as an archive file.
 - `players`: get a list of all players known to the queried player, in reverse chronological order, containing, for each player, the public key identifying the player, their latest known addresses, and when they were last seen.
-- `play <jam name> <generator name> <instance ID> <signature> <public key>`: run the generator with the specified ID, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel).
+- `play <jam name> <generator name> <instance ID> <signature> <public key>`: run the generator with the ID `<querying player ID>:<generator name>`, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel). Because the player ID is generated from the public key, a player can only request for his own generators to be played.
 
 While the first three calls do not change the state of the jam and can therefore be anonymous, the `play` call will, in addition to running the generator, download and deploy the generator if it is not locally present and add it to the list of known generators, and add the querying player to the list of players if it is not already there (along with the public key provided, which will be used to identify the player from that point on). It therefore has to be signed by the querying player and verified by the queried player.
 
@@ -104,6 +104,53 @@ The generator function should be able to produce any kind of audio, synthesized 
 
 For all these options we can use redis pub-sub to deliver the musical notation from generator to player. We can probably use redis's expiration mechanism to avoid playing sounds if the player hasn't gotten around to playing them in time.
 
+## Requirements
+
+- A linux machine with a sound card and a network connection
+- A posix shell with curl tar and gzip
+- [Redis](https://redis.io/) - currently we do not use the time series extension, but in the future we probably will, and that will require the time series module to be installed (or the entire redis stack).
+- [SBCL](http://www.sbcl.org/)
+- [Quicklisp](https://www.quicklisp.org/beta/)
+  1. Download the `quicklisp.lisp` file from the Quicklisp website
+  2. Run `sbcl --load <full path to quicklisp.lisp>`
+  3. Optionally, set the quicklisp home directory with `(setf quicklisp-quickstart::*home* "<full path to quicklisp home>")`
+  4. Run `(quicklisp-quickstart:install)`
+  5. Run `(ql:add-to-init-file)`
+  6. Create a symbolic link to this repository in the `local-projects` directory of the quicklisp home directory with `ln -s <full path to repository> <full path to quicklisp home>/local-projects/marmalade`
+
+## Running Marmalade
+
+We've only just begun and there is no UI yet, so running the system is a bit of a pain in the ass.
+
+Assuming you have a copy of the repository, start by going into the `workdir` directory and editing `config.lisp` to your liking (you can use any directory, as long as it contains a `config.lisp`). Then start a shell session within `workdir` and run SBCL with the Marmalade system loaded:
+
+```sh
+sbcl --eval '(ql:quickload "marmalade")'
+```
+
+Note: SBCL doesn't use readline by default, so you might want to install `rlwrap` or `rlfe` and prepend all `sbcl` calls with `rlfe -h ~/.sbcl_history`, like so:
+
+```sh
+rlfe -h ~/.sbcl_history sbcl --eval '(ql:quickload "marmalade")'
+```
+
+This will open a lisp REPL in which you can run commands, so start by running the p2p server with `(start-p2p-server)`. The port on which the server runs is configurable in `config.lisp`, and in this documentation it's assumed to be `2468`. Once the server is running you can use your browser to access the following endpoints:
+- http://localhost:2468/stats - web server stats
+- http://localhost:2468/players - list of players (likely to only contain yourself)
+- http://localhost:2468/generators - list of generators (likely to be `false`, indicating that you have not yet composed or collected any)
+- http://localhost:2468/generator/<generator ID> - download a generator archive file (although you probably don't have any yet)
+
+To create a generator, you need to prepare a directory (anywhere on your filesystem) in which the first executable file is the entry point of your generator, and then run `(pack-generator "<path to generator directory>")` in the REPL. This will create a generator archive file in the `generators/` directory and thus register the generator, which you can verify by refreshing the `generators` endpoint. This will also provide you with the generator ID, composed of your player ID and the name of the generator directory you prepared. Once you have the generator ID, you can verify that its available for download by other players by visiting the `generator` endpoint on your browser.
+
+Before you run a generator, you need to start a jam by running `(start-jam "<jam name>")` in the REPL. This will create a directory with the name of the jam inside the `jams/` directory, containing a `jam.log` file and a redis persistence directory.
+
+Now you should be able to run the generator using curl:
+```sh
+curl -XPOST -H 'signature: <signature>' -H "pubkey: <pubkey>" -H 'address: http://localhost:2468' http://localhost:2468/play/<jam-name>/<generator name>/<instance ID>
+```
+
+The signature isn't checked yet, so you can put anything there. The pubkey is used to identify the player, and should be the same as the one you defined in `config.lisp`. The jam name should be the name of the jam you started, the generator name should be the name of the generator directory you prepared, and the instance ID should be unique for each run of the generator. Note that the generator name is not the generator ID, which is the generator name prefixed by the player ID.
+
 ## Thoughts
 
 ### Schedule
@@ -112,27 +159,4 @@ Maybe we create an evolving potential structure of a jam, represented as a direc
 
 ### Events
 
-Maybe we want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state.
-
-## Requirements
-
-- A linux machine with a sound card and a network connection
-- A posix shell with curl tar and gzip
-- [SBCL](http://www.sbcl.org/)
-- [Quicklisp](https://www.quicklisp.org/beta/)
-  1. Download the `quicklisp.lisp` file from the Quicklisp website
-  2. Run `sbcl --load <full path to quicklisp.lisp>`
-  3. Optionally, set the quicklisp home directory with `(setf quicklisp-quickstart::*home* "<full path to quicklisp home>")`
-  4. Run `(quicklisp-quickstart:install)`
-  5. Run `(ql:add-to-init-file)`
-
-## Running Marmalade
-
-1. Clone this repository
-2. Edit `config.lisp` to your liking
-3. Create a `generators` directory in the player directory and fill it with generators to your liking
-    1. Each generator should be a `tgz` file named `<player ID>:<generator name>.tgz` and containing a directory in which the first executable file is the generator's entry point
-4. Run `sbcl --load src/run.lisp` (or `rlfe -h ~/.sbcl_history --load src/run.lisp` if you want readline support)
-5. In the REPL run `(start-jam "<jam name>")`
-
-Note: SBCL doesn't use readline by default, so you might want to install `rlwrap` or `rlfe` and prepend all `sbcl` calls with `rlfe -h ~/.sbcl_history`.
+Maybe we want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state, and redis has great pub-sub support.

@@ -11,5 +11,3 @@
   ; TODO: Implement this.
   (declare (ignore jam-name generator-name instance-id signature pubkey address))
   t)
-
-(provide 'crypto)

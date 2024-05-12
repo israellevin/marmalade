@@ -1,4 +1,4 @@
-;;;; HTTP server for player to player communication on a Marmalade network.
+;;;; HTTP server for player to player communication.
 
 (defun text-response (content http-request response-stream
                               &key (status 200) (response-string "OK") (mime "text/plain"))

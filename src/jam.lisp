@@ -1,4 +1,4 @@
-;;;; Jam functions.
+;;;; Jam related functions.
 
 (defvar *jams-directory* (format nil "~Ajams/" *work-directory*))
 (defvar *current-jam* nil)
@@ -27,5 +27,3 @@
   "Disconnects from the current jam."
   (red:shutdown)
   (redis:disconnect))
-
-(provide 'jam)

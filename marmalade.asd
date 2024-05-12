@@ -8,9 +8,11 @@
   :depends-on ("cl-redis" "com.inuoe.jzon" "file-attributes" "flexi-streams"
                "ironclad" "quri" "s-http-server" "split-sequence" "uiop"
                "verbose")
+  :pathname "src"
   :components ((:file "common")
                (:file "crypto")
                (:file "jam" :depends-on ("common"))
-               (:file "data-access" :depends-on ("common" "crypto" "jam"))
-               (:file "player-to-player" :depends-on ("common" "data-access"))
-               (:file "run" :depends-on ("common" "player-to-player"))))
+               (:file "player" :depends-on ("common" "crypto" "jam"))
+               (:file "generator" :depends-on ("common" "crypto" "player"))
+               (:file "p2p-client")
+               (:file "p2p-server" :depends-on ("common" "generator" "player" "p2p-client"))))
