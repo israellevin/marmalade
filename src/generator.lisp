@@ -1,5 +1,7 @@
 ;;; Generator related functions.
 
+(in-package :marmalade)
+
 (defvar *generators-directory* (format nil "~Agenerators/" *work-directory*))
 (ensure-directories-exist *generators-directory*)
 

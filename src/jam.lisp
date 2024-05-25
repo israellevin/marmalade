@@ -1,5 +1,7 @@
 ;;;; Jam related functions.
 
+(in-package :marmalade)
+
 (defvar *jams-directory* (format nil "~Ajams/" *work-directory*))
 (defvar *current-jam* nil)
 
@@ -20,10 +22,12 @@
     (uiop:launch-program (format nil "~A --dir ~A --save '' --appendonly yes --appenddirname redis"
                                  (get-config :redis-command) jam-path))
     (setf *current-jam* jam-name))
+  (push #'jam-disconnect sb-ext:*exit-hooks*)
   (sleep 0.1)
   (redis:connect))
 
 (defun jam-disconnect ()
   "Disconnects from the current jam."
   (red:shutdown)
-  (redis:disconnect))
+  (redis:disconnect)
+  (setf sb-ext:*exit-hooks* (remove #'jam-disconnect sb-ext:*exit-hooks*)))

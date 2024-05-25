@@ -134,15 +134,15 @@ Note: SBCL doesn't use readline by default, so you might want to install `rlwrap
 rlfe -h ~/.sbcl_history sbcl --eval '(ql:quickload "marmalade")'
 ```
 
-This will open a lisp REPL in which you can run commands, so start by running the p2p server with `(start-p2p-server)`. The port on which the server runs is configurable in `config.lisp`, and in this documentation it's assumed to be `2468`. Once the server is running you can use your browser to access the following endpoints:
+This will open a lisp REPL in which you can run commands, so start by running the p2p server with `(marmalade:start-p2p-server)`. The port on which the server runs is configurable in `config.lisp`, and in this documentation it's assumed to be `2468`. Once the server is running you can use your browser to access the following endpoints:
 - http://localhost:2468/stats - web server stats
 - http://localhost:2468/players - list of players (likely to only contain yourself)
 - http://localhost:2468/generators - list of generators (likely to be `false`, indicating that you have not yet composed or collected any)
 - http://localhost:2468/generator/<generator ID> - download a generator archive file (although you probably don't have any yet)
 
-To create a generator, you need to prepare a directory (anywhere on your filesystem) in which the first executable file is the entry point of your generator, and then run `(pack-generator "<path to generator directory>")` in the REPL. This will create a generator archive file in the `generators/` directory and thus register the generator, which you can verify by refreshing the `generators` endpoint. This will also provide you with the generator ID, composed of your player ID and the name of the generator directory you prepared. Once you have the generator ID, you can verify that its available for download by other players by visiting the `generator` endpoint on your browser.
+To create a generator, you need to prepare a directory (anywhere on your filesystem) in which the first executable file is the entry point of your generator, and then run `(marmalade:pack-generator "<path to generator directory>")` in the REPL. This will create a generator archive file in the `generators/` directory and thus register the generator, which you can verify by refreshing the `generators` endpoint. This will also provide you with the generator ID, composed of your player ID and the name of the generator directory you prepared. Once you have the generator ID, you can verify that its available for download by other players by visiting the `generator` endpoint on your browser.
 
-Before you run a generator, you need to start a jam by running `(start-jam "<jam name>")` in the REPL. This will create a directory with the name of the jam inside the `jams/` directory, containing a `jam.log` file and a redis persistence directory.
+Before you run a generator, you need to start a jam by running `(marmalade:jam-connect "<jam name>")` in the REPL. This will create a directory with the name of the jam inside the `jams/` directory, containing a `jam.log` file and a redis persistence directory.
 
 Now you should be able to run the generator using curl:
 ```sh
@@ -150,6 +150,8 @@ curl -XPOST -H 'signature: <signature>' -H "pubkey: <pubkey>" -H 'address: http:
 ```
 
 The signature isn't checked yet, so you can put anything there. The pubkey is used to identify the player, and should be the same as the one you defined in `config.lisp`. The jam name should be the name of the jam you started, the generator name should be the name of the generator directory you prepared, and the instance ID should be unique for each run of the generator. Note that the generator name is not the generator ID, which is the generator name prefixed by the player ID.
+
+There are also `(marmalade:jam-disconnect "<jam name>")` and `(marmalade:stop-p2p-server)` functions that you can run in the REPL to stop the jam and the server, respectively, although the servers will also stop automatically if you exit the REPL.
 
 ## Thoughts
 

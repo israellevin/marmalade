@@ -1,5 +1,7 @@
 ;;;; HTTP server for player to player communication.
 
+(in-package :marmalade)
+
 (defun text-response (content http-request response-stream
                               &key (status 200) (response-string "OK") (mime "text/plain"))
   "Generate and write an HTTP text response."
@@ -68,5 +70,9 @@
 (defvar *network-server* (s-http-server:make-s-http-server :port (get-config :port)))
 (s-http-server:register-context-handler *network-server* "/" 'network-request-handler)
 
-(defun start-p2p-server () (s-http-server:start-server *network-server*))
-(defun stop-p2p-server () (s-http-server:stop-server *network-server*))
+(defun start-p2p-server ()
+  (push #'stop-p2p-server sb-ext:*exit-hooks*)
+  (s-http-server:start-server *network-server*))
+(defun stop-p2p-server ()
+  (s-http-server:stop-server *network-server*)
+  (setf sb-ext:*exit-hooks* (remove #'stop-p2p-server sb-ext:*exit-hooks*)))

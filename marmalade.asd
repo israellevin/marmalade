@@ -9,10 +9,12 @@
                "ironclad" "quri" "s-http-server" "split-sequence" "uiop"
                "verbose")
   :pathname "src"
-  :components ((:file "common")
-               (:file "crypto")
-               (:file "jam" :depends-on ("common"))
-               (:file "player" :depends-on ("common" "crypto" "jam"))
-               (:file "generator" :depends-on ("common" "crypto" "player"))
-               (:file "p2p-client")
-               (:file "p2p-server" :depends-on ("common" "generator" "player" "p2p-client"))))
+  :components (
+               (:file "package")
+               (:file "common" :depends-on ("package"))
+               (:file "crypto" :depends-on ("package"))
+               (:file "jam" :depends-on ("common" "package"))
+               (:file "player" :depends-on ("common" "crypto" "jam" "package"))
+               (:file "generator" :depends-on ("common" "crypto" "package" "player"))
+               (:file "p2p-client" :depends-on ("package"))
+               (:file "p2p-server" :depends-on ("common" "generator" "package" "player" "p2p-client"))))

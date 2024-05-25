@@ -1,5 +1,7 @@
 ;;;; Player related functions.
 
+(in-package :marmalade)
+
 (defvar *players-directory* (format nil "~Aplayers/" *work-directory*))
 (ensure-directories-exist *players-directory*)
 

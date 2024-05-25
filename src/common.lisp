@@ -1,5 +1,7 @@
 ;;;; Common functions.
 
+(in-package :marmalade)
+
 (defvar *work-directory* (uiop/os:getcwd))
 (defvar *config-file-path* (format nil "~Aconfig.lisp" *work-directory*))
 

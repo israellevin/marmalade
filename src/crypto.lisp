@@ -1,5 +1,7 @@
 ;;;; Cryptographical operations.
 
+(in-package :marmalade)
+
 (defun pubkey-to-player-id (pubkey)
   "Returns the player ID - first 8 characters of SHA256 of the pubkey."
   (subseq
