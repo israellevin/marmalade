@@ -2,9 +2,6 @@
 
 (in-package :marmalade)
 
-(defvar *players-directory* (format nil "~Aplayers/" *work-directory*))
-(ensure-directories-exist *players-directory*)
-
 (defun set-player (player-id player-data)
   "Sets the data of the player with the specified ID."
   (with-open-file

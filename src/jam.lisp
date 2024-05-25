@@ -2,7 +2,6 @@
 
 (in-package :marmalade)
 
-(defvar *jams-directory* (format nil "~Ajams/" *work-directory*))
 (defvar *current-jam* nil)
 
 (defun make-jam-log (jam-directory)

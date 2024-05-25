@@ -2,9 +2,6 @@
 
 (in-package :marmalade)
 
-(defvar *generators-directory* (format nil "~Agenerators/" *work-directory*))
-(ensure-directories-exist *generators-directory*)
-
 (defun pack-generator (generator-directory)
   "Packs the generator in the specified directory into a tgz file in the archive."
   (let* ((generator-name (file-namestring generator-directory))
