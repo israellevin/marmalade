@@ -10,7 +10,7 @@
 
 (defun get-generator-archive-path (generator-id)
   "Returns the path to the tgz file containing the generator with the specified ID."
-  (let ((path (format nil "~A~A.tgz" *generators-directory* generator-id)))
+  (let ((path (make-pathname :directory *generators-directory* :name (format nil "~A.tgz" generator-id))))
     (if (uiop:file-exists-p path) path nil)))
 
 (defun get-generators ()

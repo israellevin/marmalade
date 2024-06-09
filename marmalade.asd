@@ -10,12 +10,12 @@
                "verbose")
   :pathname "src"
   :components (
-               (:file "config" :depends-on ("package"))
+               (:file "configuration" :depends-on ("package"))
                (:file "crypto" :depends-on ("package"))
-               (:file "generator" :depends-on ("config" "crypto" "package" "player" "worktree"))
-               (:file "jam" :depends-on ("config" "package"))
+               (:file "generator" :depends-on ("configuration" "crypto" "package" "player" "worktree"))
+               (:file "jam" :depends-on ("configuration" "package"))
                (:file "p2p-client" :depends-on ("package"))
-               (:file "p2p-server" :depends-on ("config" "generator" "package" "player" "p2p-client"))
+               (:file "p2p-server" :depends-on ("configuration" "generator" "package" "player" "p2p-client"))
                (:file "package")
-               (:file "player" :depends-on ("config" "crypto" "jam" "package" "worktree"))
-               (:file "worktree" :depends-on ("config" "package"))))
+               (:file "player" :depends-on ("configuration" "crypto" "jam" "package" "worktree"))
+               (:file "worktree" :depends-on ("configuration" "package"))))
