@@ -5,7 +5,7 @@
   :version "0.0.1"
   :author "I. <root@chakra>"
   :licence "Public Domain"
-  :depends-on ("cl-base64" "cl-redis" "cl-ssh-keys" "com.inuoe.jzon" "file-attributes"
+  :depends-on ("cl-redis" "cl-ssh-keys" "com.inuoe.jzon" "file-attributes"
                "flexi-streams" "ironclad" "quri" "s-http-server" "split-sequence" "uiop" "verbose")
   :pathname "src"
   :components (

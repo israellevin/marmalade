@@ -48,7 +48,7 @@
   (multiple-value-bind
     (player-id public-key public-key-string)
     (check-signature
-      (format nil "~A~A~A~A" jam-name generator-name instance-id address) signature-B64 public-key-string)
+      (format nil "~A:~A:~A:~A" jam-name generator-name instance-id address) signature-B64 public-key-string)
     (upsert-player player-id public-key-string address)
     (values player-id public-key public-key-string)))
 

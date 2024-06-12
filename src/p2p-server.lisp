@@ -56,7 +56,6 @@
                          (signature (cdr (assoc :signature headers)))
                          (pubkey (cdr (assoc :pubkey headers)))
                          (address (cdr (assoc :address headers))))
-                    (format t "playing generator ~A instance ~A signature ~A pubkey ~A~%" generator-name instance-id signature pubkey)
                     (if (play-generator jam-name generator-name instance-id address signature pubkey)
                         (text-response "OK" http-request response-stream)
                         (s-http-server:standard-http-html-error-response
@@ -66,8 +65,17 @@
       (t (s-http-server:standard-http-html-error-response
            http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path))))))
 
+(defun handled-network-request-handler (server handler http-request response-stream)
+  "Handles requests with error handling."
+  (handler-case
+    (network-request-handler server handler http-request response-stream)
+    (error (condition)
+           (warn (format nil "error: ~A~%" condition))
+           (s-http-server:standard-http-html-error-response
+             http-request response-stream 500 "internal server error" (format nil "~A" condition)))))
+
 (defvar *network-server* (s-http-server:make-s-http-server :port (get-config :port)))
-(s-http-server:register-context-handler *network-server* "/" 'network-request-handler)
+(s-http-server:register-context-handler *network-server* "/" 'handled-network-request-handler)
 
 (defun start-p2p-server ()
   (push #'stop-p2p-server sb-ext:*exit-hooks*)
