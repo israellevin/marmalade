@@ -10,7 +10,7 @@
 
 (defun get-generator-archive-path (generator-id)
   "Returns the path to the tgz file containing the generator with the specified ID."
-  (let ((path (make-pathname :directory *generators-directory* :name (format nil "~A.tgz" generator-id))))
+  (let ((path (merge-pathnames (make-pathname :name generator-id :type "tgz") *generators-directory*)))
     (if (uiop:file-exists-p path) path nil)))
 
 (defun get-generators ()
@@ -18,12 +18,12 @@
   (directory-map
     (lambda (file-properties)
       (when (string= (getf file-properties :extension) "tgz")
-          (let*
-            ((generator-id (getf file-properties :basename))
-             (generator-parts (split-sequence:split-sequence #\: generator-id))
-             (player-id (first generator-parts))
-             (generator-name (second generator-parts)))
-            `(:id ,generator-id :name ,generator-name :player ,player-id)))) *generators-directory*))
+        (let*
+          ((generator-id (getf file-properties :basename))
+           (generator-parts (split-sequence:split-sequence #\: generator-id))
+           (player-id (first generator-parts))
+           (generator-name (second generator-parts)))
+          `(:id ,generator-id :name ,generator-name :player ,player-id)))) *generators-directory*))
 
 (defun run-first-executable-in-path (path)
   "Iterate over the files in the specified path and run the first executable found."
@@ -33,21 +33,20 @@
             :owner-execute)
       (uiop:launch-program (namestring file)))))
 
-(defun play-generator (jam-name generator-name instance-id signature pubkey address)
+(defun play-generator (jam-name generator-name instance-id address signature-B64 public-key-string)
   "Plays the generator with the specified ID."
   (unless (string= *current-jam* jam-name) (error "Not connected to jam ~A." jam-name))
-  (let* ((player-id (pubkey-to-player-id pubkey))
+  (let* ((player-id
+           (validate-play-request jam-name generator-name instance-id address signature-B64 public-key-string))
          (player (get-player player-id)))
-    (when player (unless (string= (getf player :pubkey) pubkey) (error "Pubkey mismatch.")))
-    (validate-play-request jam-name generator-name instance-id signature pubkey address)
     (let* ((generator-id (format nil "~A:~A" player-id generator-name))
            (generator-archive-path (get-generator-archive-path generator-id))
-           (generator-working-path (format nil
-                                           "~A~A/~A/~A/~A/"
-                                           *jams-directory* player-id *current-jam* generator-name instance-id)))
+           (generator-working-path
+             (reduce (lambda (path part) (merge-pathnames (format nil "~A/" part) path))
+                     (list *current-jam* player-id generator-name instance-id)
+                     :initial-value *jams-directory*)))
       (when (eq generator-archive-path nil) (download-generator generator-id))
       (unless (uiop:directory-exists-p generator-working-path)
         (ensure-directories-exist generator-working-path)
         (uiop:run-program (format nil "tar -xzf ~A -C ~A" generator-archive-path generator-working-path)))
-      (run-first-executable-in-path generator-working-path))
-    (set-player player-id `(:pubkey ,pubkey :address ,address))))
+      (run-first-executable-in-path generator-working-path))))

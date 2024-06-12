@@ -53,15 +53,14 @@
                          (generator-name (fourth path-parts))
                          (instance-id (fifth path-parts))
                          (headers (s-http-server:get-headers http-request))
-                         (signature (getf headers :signature))
-                         (pubkey (getf headers :pubkey))
-                         (address (getf headers :address)))
+                         (signature (cdr (assoc :signature headers)))
+                         (pubkey (cdr (assoc :pubkey headers)))
+                         (address (cdr (assoc :address headers))))
                     (format t "playing generator ~A instance ~A signature ~A pubkey ~A~%" generator-name instance-id signature pubkey)
-                    (if (play-generator jam-name generator-name instance-id signature pubkey address)
+                    (if (play-generator jam-name generator-name instance-id address signature pubkey)
                         (text-response "OK" http-request response-stream)
                         (s-http-server:standard-http-html-error-response
-                          http-request response-stream 400 "bad request" "failed to play generator"))
-                    ))
+                          http-request response-stream 400 "bad request" "failed to play generator"))))
       (:default (s-http-server:standard-http-html-error-response
                   http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path)))
       (t (s-http-server:standard-http-html-error-response

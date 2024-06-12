@@ -5,4 +5,4 @@
 (defun download-generator (generator-id)
   "Downloads the generator with the specified ID."
   ; TODO: Implement this.
-  (declare (ignore generator-id)))
+  (error "Downloading generators is not implemented yet."))
