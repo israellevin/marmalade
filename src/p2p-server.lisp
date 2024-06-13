@@ -49,19 +49,20 @@
               (s-http-server:standard-http-html-error-response
                 http-request response-stream 404
                 "not found" (format nil "generator ~A was not found" generator-id)))))
-      (:post-play (let* ((jam-name (third path-parts))
-                         (generator-name (fourth path-parts))
-                         (instance-id (fifth path-parts))
-                         (headers (s-http-server:get-headers http-request))
-                         (signature (cdr (assoc :signature headers)))
-                         (pubkey (cdr (assoc :pubkey headers)))
-                         (address (cdr (assoc :address headers))))
-                    (if (play-generator jam-name generator-name instance-id address signature pubkey)
-                        (text-response "OK" http-request response-stream)
-                        (s-http-server:standard-http-html-error-response
-                          http-request response-stream 400 "bad request" "failed to play generator"))))
-      (:default (s-http-server:standard-http-html-error-response
-                  http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path)))
+      (:post-play
+        (let* ((jam-name (third path-parts))
+               (generator-name (fourth path-parts))
+               (instance-id (fifth path-parts))
+               (length (s-utils:parse-integer-safely (s-http-server:request-header-value http-request :content-length)))
+               (content (make-string length)))
+          (read-sequence content response-stream)
+          (format t "Content: ~A~%" content)
+          (let* ((payload (read-from-string content))
+                 (pubkey (cdr (assoc :pubkey payload)))
+                 (address (cdr (assoc :address payload)))
+                 (signature (cdr (assoc :signature payload))))
+            (play-generator jam-name generator-name instance-id address signature pubkey)
+            (text-response "OK" http-request response-stream))))
       (t (s-http-server:standard-http-html-error-response
            http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path))))))
 
