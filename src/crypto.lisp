@@ -31,7 +31,7 @@
          (public-key-string (get-key-text public-key)))
     (values player-id public-key public-key-string)))
 
-(defun check-signature (message-string signature-B64 public-key-string)
+(defun check-signature (message-string public-key-string signature-B64)
   "Checks the signature of a message."
   (multiple-value-bind
     (player-id public-key public-key-string)
@@ -43,12 +43,12 @@
         (ironclad:verify-signature public-key message-string signature-B64))
     (values player-id public-key public-key-string)))
 
-(defun validate-play-request (jam-name generator-name instance-id address signature-B64 public-key-string)
+(defun validate-play-request (jam-name generator-name instance-id address public-key-string signature-B64)
   "Validates the play request and return the player ID."
   (multiple-value-bind
     (player-id public-key public-key-string)
     (check-signature
-      (format nil "~A:~A:~A:~A" jam-name generator-name instance-id address) signature-B64 public-key-string)
+      (format nil "~A:~A:~A:~A" jam-name generator-name instance-id address) public-key-string signature-B64)
     (upsert-player player-id public-key-string address)
     (values player-id public-key public-key-string)))
 

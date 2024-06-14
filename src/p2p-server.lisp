@@ -19,14 +19,9 @@
     (length content)))
 
 (defun plists-response (plists http-request response-stream
-                               &key (status 200) (response-string "OK") (mime "application/json"))
-  "Generate and write an HTTP JSON response representing a list of plists."
-  (text-response (com.inuoe.jzon:stringify
-                   (mapcar
-                     (lambda (plist)
-                       (let ((json-object (make-hash-table :test 'equal)))
-                         (loop for (key value) on plist by #'cddr
-                               do (setf (gethash key json-object) value)) json-object)) plists))
+                               &key (status 200) (response-string "OK") (mime "text/lisp"))
+  "Generate and write an HTTP response representing a list of plists as a lisp form."
+  (text-response (prin1-to-string plists)
                  http-request response-stream :status status :response-string response-string :mime mime))
 
 (defun network-request-handler (server handler http-request response-stream)
@@ -58,10 +53,10 @@
           (read-sequence content response-stream)
           (format t "Content: ~A~%" content)
           (let* ((payload (read-from-string content))
-                 (pubkey (cdr (assoc :pubkey payload)))
                  (address (cdr (assoc :address payload)))
+                 (pubkey (cdr (assoc :pubkey payload)))
                  (signature (cdr (assoc :signature payload))))
-            (play-generator jam-name generator-name instance-id address signature pubkey)
+            (play-generator jam-name generator-name instance-id address pubkey signature)
             (text-response "OK" http-request response-stream))))
       (t (s-http-server:standard-http-html-error-response
            http-request response-stream 404 "not found" (format nil "route ~A not supported" request-path))))))

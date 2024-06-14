@@ -33,11 +33,11 @@
             :owner-execute)
       (uiop:launch-program (namestring file)))))
 
-(defun play-generator (jam-name generator-name instance-id address signature-B64 public-key-string)
+(defun play-generator (jam-name generator-name instance-id address public-key-string signature-B64)
   "Plays the generator with the specified ID."
   (unless (string= *current-jam* jam-name) (error "Not connected to jam ~A." jam-name))
   (let* ((player-id
-           (validate-play-request jam-name generator-name instance-id address signature-B64 public-key-string))
+           (validate-play-request jam-name generator-name instance-id address public-key-string signature-B64))
          (player (get-player player-id)))
     (let* ((generator-id (format nil "~A:~A" player-id generator-name))
            (generator-archive-path (get-generator-archive-path generator-id))
