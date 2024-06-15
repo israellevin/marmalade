@@ -51,7 +51,6 @@
                (length (s-utils:parse-integer-safely (s-http-server:request-header-value http-request :content-length)))
                (content (make-string length)))
           (read-sequence content response-stream)
-          (format t "Content: ~A~%" content)
           (let* ((payload (read-from-string content))
                  (address (cdr (assoc :address payload)))
                  (pubkey (cdr (assoc :pubkey payload)))

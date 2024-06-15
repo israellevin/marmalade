@@ -123,13 +123,11 @@ For all these options we can use redis pub-sub to deliver the musical notation f
 We've only just begun and there is no UI yet, so running the system is a bit of a pain in the ass.
 
 Assuming you have a copy of the repository, start by going into the `workdir` directory and editing `config.lisp` to your liking (you can use any directory, as long as it contains a `config.lisp`). Then start a shell session within `workdir` and run SBCL with the Marmalade system loaded:
-
 ```sh
 sbcl --eval '(ql:quickload "marmalade")'
 ```
 
 Note: SBCL doesn't use readline by default, so you might want to install `rlwrap` or `rlfe` and prepend all `sbcl` calls with `rlfe -h ~/.sbcl_history`, like so:
-
 ```sh
 rlfe -h ~/.sbcl_history sbcl --eval '(ql:quickload "marmalade")'
 ```
@@ -144,12 +142,17 @@ To create a generator, you need to prepare a directory (anywhere on your filesys
 
 Before you run a generator, you need to start a jam by running `(marmalade:jam-connect "<jam name>")` in the REPL. This will create a directory with the name of the jam inside the `jams/` directory, containing a `jam.log` file and a redis persistence directory.
 
-Now you should be able to run the generator using curl:
-```sh
-curl -XPOST -H 'signature: <signature>' -H "pubkey: <pubkey>" -H 'address: http://localhost:2468' http://localhost:2468/play/<jam-name>/<generator name>/<instance ID>
+Now you should be able to ask the local player to run the generator using:
+```lisp
+(marmalade:request-play marmalade:*player-id* <generator name> <instance ID>)
 ```
+The generator name should be the name of the generator directory you prepared, and the instance ID should be unique for each run of the generator. Note that the generator name is not the generator ID, which is the generator name prefixed by the player ID (in this case, the ID of the local player).
 
-The signature isn't checked yet, so you can put anything there. The pubkey is used to identify the player, and should be the same as the one you defined in `config.lisp`. The jam name should be the name of the jam you started, the generator name should be the name of the generator directory you prepared, and the instance ID should be unique for each run of the generator. Note that the generator name is not the generator ID, which is the generator name prefixed by the player ID.
+You can also run the generator with an HTTP request, for example using curl:
+```sh
+curl --data "((:signature . \"sign\") (:pubkey . \"$(cat ~/.ssh/id_rsa.pub)\") (:address . \"http://localhost:2468\"))" http://localhost:2468/play/<jam-name>/<generator-name>/<instance-ID>
+```
+The signature isn't checked yet, so you can put anything there except the string "invalid". The pubkey should be the same as the one you defined in `config.lisp`. The jam name should be the name of the jam you started
 
 There are also `(marmalade:jam-disconnect "<jam name>")` and `(marmalade:stop-p2p-server)` functions that you can run in the REPL to stop the jam and the server, respectively, although the servers will also stop automatically if you exit the REPL.
 

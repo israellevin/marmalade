@@ -8,6 +8,11 @@
          (generator-id (format nil "~A:~A" *player-id* generator-name)))
     (uiop:run-program (format nil "tar -czf ~A~A.tgz -C ~A ." *generators-directory* generator-id generator-directory))))
 
+(defun split-generator-id (generator-id)
+  "Splits the generator ID into its player and name parts."
+  (let ((delimiter-position (position #\: generator-id)))
+    (list (subseq generator-id 0 delimiter-position) (subseq generator-id (1+ delimiter-position)))))
+
 (defun get-generator-archive-path (generator-id)
   "Returns the path to the tgz file containing the generator with the specified ID."
   (let ((path (merge-pathnames (make-pathname :name generator-id :type "tgz") *generators-directory*)))
@@ -20,10 +25,10 @@
       (when (string= (getf file-properties :extension) "tgz")
         (let*
           ((generator-id (getf file-properties :basename))
-           (generator-parts (split-sequence:split-sequence #\: generator-id))
+           (generator-parts (split-generator-id generator-id))
            (player-id (first generator-parts))
            (generator-name (second generator-parts)))
-          `(:id ,generator-id :name ,generator-name :player ,player-id)))) *generators-directory*))
+          (cons generator-id `(:name ,generator-name :player ,player-id))))) *generators-directory*))
 
 (defun run-first-executable-in-path (path)
   "Iterate over the files in the specified path and run the first executable found."

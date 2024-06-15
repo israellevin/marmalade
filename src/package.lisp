@@ -4,8 +4,10 @@
   (:use common-lisp)
   (:documentation "A system for musical collaboration")
   (:export
-  #:pack-generator
-  #:jam-connect
-  #:jam-disconnect
-  #:start-p2p-server
-  #:stop-p2p-server))
+    #:*player-id*
+    #:pack-generator
+    #:jam-connect
+    #:jam-disconnect
+    #:request-play
+    #:start-p2p-server
+    #:stop-p2p-server))

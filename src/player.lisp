@@ -14,7 +14,10 @@
   "Returns the list of players."
   (directory-map
     (lambda (file-properties)
-      (if (string= (getf file-properties :extension) "lisp") (get-player (getf file-properties :basename))))
+      (when (string= (getf file-properties :extension) "lisp")
+        (let* ((player-id (getf file-properties :basename))
+               (player (get-player player-id)))
+          (when player (cons player-id player)))))
     *players-directory*))
 
 (defun upsert-player (player-id public-key address)
