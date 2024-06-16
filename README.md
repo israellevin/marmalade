@@ -148,12 +148,6 @@ Now you should be able to ask the local player to run the generator using:
 ```
 The generator name should be the name of the generator directory you prepared, and the instance ID should be unique for each run of the generator. Note that the generator name is not the generator ID, which is the generator name prefixed by the player ID (in this case, the ID of the local player).
 
-You can also run the generator with an HTTP request, for example using curl:
-```sh
-curl --data "((:signature . \"sign\") (:pubkey . \"$(cat ~/.ssh/id_rsa.pub)\") (:address . \"http://localhost:2468\"))" http://localhost:2468/play/<jam-name>/<generator-name>/<instance-ID>
-```
-The signature isn't checked yet, so you can put anything there except the string "invalid". The pubkey should be the same as the one you defined in `config.lisp`. The jam name should be the name of the jam you started
-
 There are also `(marmalade:jam-disconnect "<jam name>")` and `(marmalade:stop-p2p-server)` functions that you can run in the REPL to stop the jam and the server, respectively, although the servers will also stop automatically if you exit the REPL.
 
 ## Thoughts

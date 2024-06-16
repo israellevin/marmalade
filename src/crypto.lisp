@@ -2,7 +2,7 @@
 
 (in-package :marmalade)
 
-(defvar *crypto-debug* t)
+(defvar *crypto-debug* nil)
 
 (defun get-player-id (key)
   "Returns the player ID from a given SSH key."
@@ -31,24 +31,37 @@
          (public-key-string (get-key-text public-key)))
     (values player-id public-key public-key-string)))
 
-(defun check-signature (message-string public-key-string signature-B64)
+(defun play-request-signable (jam-name generator-name instance-id address)
+  "Generates a signable byte array for a play request."
+  (ironclad:digest-sequence :sha256 (ironclad:ascii-string-to-byte-array
+                                      (format nil "~A:~A:~A:~A" jam-name generator-name instance-id address))))
+
+(defun sign-play-request (jam-name generator-name instance-id address)
+  "Signs a play request."
+  (base64:usb8-array-to-base64-string
+    (ironclad:sign-message
+      *player-key* (play-request-signable jam-name generator-name instance-id address))))
+
+(defun check-signature (jam-name generator-name instance-id address public-key-string signature)
   "Checks the signature of a message."
   (multiple-value-bind
     (player-id public-key public-key-string)
     (parse-public-key-string public-key-string)
     (if *crypto-debug*
         (progn (warn "Signature checking is disabled for debugging - will accept any signature except \"invalid\".")
-               (when (string= signature-B64 "invalid") (error "Invalid signature.")))
-        ;; This is untested and probably doesn't work - the message and signature probably need to be in binary format.
-        (ironclad:verify-signature public-key message-string signature-B64))
+               (when (string= signature "invalid") (error "Invalid signature.")))
+        (unless (ironclad:verify-signature
+                  public-key
+                  (play-request-signable jam-name generator-name instance-id address)
+                  (base64:base64-string-to-usb8-array signature))
+          (error "Invalid signature.")))
     (values player-id public-key public-key-string)))
 
-(defun validate-play-request (jam-name generator-name instance-id address public-key-string signature-B64)
+(defun validate-play-request (jam-name generator-name instance-id address public-key-string signature)
   "Validates the play request and return the player ID."
   (multiple-value-bind
     (player-id public-key public-key-string)
-    (check-signature
-      (format nil "~A:~A:~A:~A" jam-name generator-name instance-id address) public-key-string signature-B64)
+    (check-signature jam-name generator-name instance-id address public-key-string signature)
     (upsert-player player-id public-key-string address)
     (values player-id public-key public-key-string)))
 

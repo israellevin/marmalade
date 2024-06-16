@@ -4,7 +4,6 @@
 
 (defun request-from-player (player-id endpoint &optional (method :get) (data nil))
   "Makes a request to the specified player on the specified endpoint with the specified data."
-  (format t "!!!~A~%" data)
   (dex:request
     (format nil "~A/~A" (getf (get-player player-id) :address) endpoint)
     :method method :content data :keep-alive nil))
@@ -42,7 +41,7 @@
 
 (defun request-play (player-id generator-name instance-id)
   "Requests the specified generator to be played by the specified player."
-  (let ((signature "sign")) ; TODO: Implement the signature so we can test the verification mechanism.
+  (let ((signature (sign-play-request *current-jam* generator-name instance-id *player-address*)))
     (request-from-player
       player-id (format nil "play/~A/~A/~A" *current-jam* generator-name instance-id) :post
       (prin1-to-string

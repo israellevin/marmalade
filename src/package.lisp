@@ -9,5 +9,6 @@
     #:jam-connect
     #:jam-disconnect
     #:request-play
+    #:sign-play-request
     #:start-p2p-server
     #:stop-p2p-server))

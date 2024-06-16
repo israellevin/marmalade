@@ -3,7 +3,7 @@
 (in-package :marmalade)
 
 (defvar *work-directory* (uiop/os:getcwd))
-(defvar *config-file-path* (merge-pathnames #p"config.lisp" *work-directory*))
+(defvar *config-file-path* (merge-pathnames #P"config.lisp" *work-directory*))
 
 (defun get-config (key &optional (default nil))
   "Returns the value of the specified configuration key."
