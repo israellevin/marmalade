@@ -31,16 +31,15 @@
          (public-key-string (get-key-text public-key)))
     (values player-id public-key public-key-string)))
 
-(defun play-request-digest (jam-name generator-name instance-id address)
-  "Generates a byte array digest for a play request."
-  (ironclad:digest-sequence :sha256 (ironclad:ascii-string-to-byte-array
-                                      (format nil "~A:~A:~A:~A" jam-name generator-name instance-id address))))
+(defun play-request-bytes (jam-name generator-name instance-id address)
+  "Generates a byte array representation of a play request."
+  (ironclad:ascii-string-to-byte-array (format nil "~A:~A:~A:~A" jam-name generator-name instance-id address)))
 
 (defun sign-play-request (jam-name generator-name instance-id address)
   "Signs a play request."
   (base64:usb8-array-to-base64-string
-    (ironclad:sign-message
-      *player-key* (play-request-digest jam-name generator-name instance-id address))))
+    (ssh-keys:rsassa-pkcs1-v1_5-sign
+      *player-key* (play-request-bytes jam-name generator-name instance-id address) :sha256)))
 
 (defun check-signature (jam-name generator-name instance-id address public-key-string signature)
   "Checks the signature of a message."
@@ -50,10 +49,9 @@
     (if *crypto-debug*
         (progn (warn "Signature checking is disabled for debugging - will accept any signature except \"invalid\".")
                (when (string= signature "invalid") (error "Invalid signature.")))
-        (unless (ironclad:verify-signature
-                  public-key
-                  (play-request-digest jam-name generator-name instance-id address)
-                  (base64:base64-string-to-usb8-array signature))
+        (unless (ssh-keys:rsassa-pkcs1-v1_5-verify
+                  public-key (play-request-bytes jam-name generator-name instance-id address)
+                  (base64:base64-string-to-usb8-array signature) :sha256)
           (error "Invalid signature.")))
     (values player-id public-key public-key-string)))
 
