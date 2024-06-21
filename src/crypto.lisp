@@ -63,7 +63,7 @@
     (upsert-player player-id public-key-string address)
     (values player-id public-key public-key-string)))
 
-(defvar *player-address* (format nil "http://~A:~A" (get-config :host) (get-config :port)))
+(defvar *player-address* (format nil "http://~A:~D" (get-config :host) (get-config :port)))
 (multiple-value-bind (player-id key public-key-string) (parse-private-key-file (get-config :private-key-path))
   (defvar *player-id* player-id)
   (defvar *player-key* key)

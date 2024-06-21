@@ -7,14 +7,14 @@
 (defun make-jam-log (jam-directory)
   (org.shirakumo.verbose:restart-global-controller)
   (org.shirakumo.verbose:define-pipe
-    () (org.shirakumo.verbose:file-faucet :file (format nil "~Ajam.log" jam-directory))))
+    () (org.shirakumo.verbose:file-faucet :file (merge-pathnames #P"jam.log" jam-directory))))
 
 (defun jam-log (message &optional (level :info))
   (org.shirakumo.verbose:log level :jam message))
 
 (defun jam-connect (jam-name)
   "Connects to a (potentially new) jam with the specified name."
-  (let ((jam-path (format nil "~A~A/" *jams-directory* jam-name)))
+  (let ((jam-path (merge-pathnames jam-name *jams-directory*)))
     (ensure-directories-exist jam-path)
     (make-jam-log jam-path)
     (jam-log (format nil "Starting jam ~A." jam-name))
