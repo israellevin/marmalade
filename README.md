@@ -101,15 +101,7 @@ curl -XPOST "http://localhost:2468/play/$jam/$generator/$instance" --data "( \
 
 ## Generators
 
-Generators are implemented as a directory in which the first executable file is the generator's entry point. A player wishing to play a generator will deploy it in a directory in the player's filesystem and execute the first executable in a separate process. This means that, at the moment, generators have to be in a format that is executable by the player's shell, and that they can completely fuck up the player's local environment. The first issue can be mitigated by running the generator with reduced privileges, chrooted to the generator's working directory, with CPU, RAM and FS quotas in place, and given access only to necessary resources (redis port). In the future we will probably run generators on a virtual machine, making our generators cross-platform.
-
-The generator lifecycle is as follows:
-1. A generator is composed by a player.
-2. The player requests all the players, self included, to `play` the generator, providing an arbitrary instance ID (current timestamp is a good choice).
-3. Every player that receives the request checks that if the generator is locally known, `get`ting it from the requesting player if it is not.
-4. Every player that receives the request deploys and runs the generator in it's working directory, `<jam name>/<player ID>/<generator name>/<instance ID>/`, unless that directory already exists (which means the generator was already `play`ed with this instance ID).
-5. The generator instance reads the state of the jame and produces audio and sets tags accordingly.
-6. The generator instance keeps running until it stops itself, or until the jam ends.
+To keep generators agnostic, and to postpone the decision of how to produce audio, generators are simply a directory (packed as a tgz file) containing an arbitrary number of files and subdirectories, with the first executable file in the top directory being the entry point of the generator. To keep things safe and standard, we stick that directory inside a firecracker microVM.
 
 ### Access to the State
 
@@ -129,13 +121,24 @@ The ID of the player and the generator instance will be embedded in the path of 
 ### Producing Audio
 
 The generator function should be able to produce any kind of audio, synthesized or sampled - a single note, a bar, a riff, and silences of different durations. One way to acheive this is to give the generator instances access to the player's sound system, and let them write raw audio data to it. This is certainly the most versatile and efficient way to produce audio, but it's also harder to code and debug. Other options include:
-
 - **[Mégra](https://megra-doc.readthedocs.io/en/latest/tutorial/organizing-sound/)** just looks awesome. Requires Jack or PipeWire, but holy shit, it looks awesome.
 - **[Supercollider](https://supercollider.github.io/)** is very impressive, seems to be very widely supported and something of an industry standard. Seems to require more setup.
 - **[cl-patterns](https://github.com/defaultxr/cl-patterns)** is built on top of Supercollider and does it cooler and lispier.
 - **[Sonic Pi](https://sonic-pi.net/)** is something else we can learn from.
 
 For all these options we can use redis pub-sub to deliver the musical notation from generator to player. We can probably use redis's expiration mechanism to avoid playing sounds if the player hasn't gotten around to playing them in time.
+
+### Generator Tech Details
+
+Our current setup creates a base image (based on the minimal Alpine linux docker image) that firecracker can run, with a local init script that expects a tgz file on port `2468`. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the redis port on the host machine, which it uses to read the state of the jam, write tags, and produce audio. TODO: currently we have full network access, for development purposes, but it's just a matter of in `iptable` command.
+
+The generator lifecycle is as follows:
+1. A generator is composed by a player.
+2. The player requests all the players, self included, to `play` the generator, providing an arbitrary instance ID (current timestamp is a good choice).
+3. Every player that receives the request checks that if the generator is locally known, `get`ting it from the requesting player if it is not.
+4. Every player that receives the request deploys and runs the generator in its own microVM, with a socket file in `<jam name>/<player ID>/<generator name>/<instance ID>/`, unless that directory already exists (which means the generator was already `play`ed with this instance ID).
+5. The generator instance reads the state of the jame and produces audio and sets tags accordingly.
+6. The generator instance keeps running until it stops itself, or until the jam ends.
 
 ## Requirements
 
@@ -150,6 +153,8 @@ For all these options we can use redis pub-sub to deliver the musical notation f
   4. Run `(quicklisp-quickstart:install)`
   5. Run `(ql:add-to-init-file)`
   6. Create a symbolic link to this repository in the `local-projects` directory of the quicklisp home directory with `ln -s <full path to repository> <full path to quicklisp home>/local-projects/marmalade`
+- [Firecracker](https://firecracker-microvm.github.io/) - for running the generators in a secure and isolated environment
+- A base image for the firecracker microVMs, which can be created by running the `create-base-image.sh` script in the `firecracker` directory.
 
 ## Running Marmalade
 
