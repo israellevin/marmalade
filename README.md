@@ -142,7 +142,8 @@ The generator lifecycle is as follows:
 
 ## Requirements
 
-- A linux machine with a sound card and a network connection
+- This repository
+- A linux machine with a sound card and a network connection (soundcard still not really required, or used)
 - A posix shell with curl tar and gzip
 - [Redis](https://redis.io/) - currently we do not use the time series extension, but in the future we probably will, and that will require the time series module to be installed (or the entire redis stack).
 - [SBCL](http://www.sbcl.org/)
@@ -153,8 +154,8 @@ The generator lifecycle is as follows:
   4. Run `(quicklisp-quickstart:install)`
   5. Run `(ql:add-to-init-file)`
   6. Create a symbolic link to this repository in the `local-projects` directory of the quicklisp home directory with `ln -s <full path to repository> <full path to quicklisp home>/local-projects/marmalade`
-- [Firecracker](https://firecracker-microvm.github.io/) - for running the generators in a secure and isolated environment
-- A base image for the firecracker microVMs, which can be created by running the `create-base-image.sh` script in the `firecracker` directory.
+- [Firecracker](https://firecracker-microvm.github.io/) setup, including the Firecracker binary, a kernel image and a root filesystem image which can receive and run a generator in a standard, secure and isolated environment - all this goodness gets downloaded and built by running the `firecracker/prepare.sh` script (which requires `bash`, `curl`, `jq`, and some basic GNU utilities).
+- [slirp4netns](https://github.com/rootless-containers/slirp4netns) for userspace provisioning of network access to the firecracker microVMs
 
 ## Running Marmalade
 
