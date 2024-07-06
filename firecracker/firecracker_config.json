@@ -1,17 +1,6 @@
-#!/usr/bin/bash
-cd "$(dirname "${BASH_SOURCE[0]}")"
-rm /tmp/firecracker.socket
-
-ip netns delete marmalade
-ip netns add marmalade
-ip netns exec marmalade ip tuntap add tap0 mode tap
-ip netns exec marmalade ip link set tap0 up
-ip netns exec marmalade ip addr add 172.16.0.1/24 dev tap0
-ip netns exec marmalade ./firecracker --api-sock /tmp/firecracker.socket --config-file <(cat <<EOF
-#marmalade-generator-run wlan0 tap0 172.16.0.1/24 ./firecracker /tmp/firecracker.socket <(cat <<EOF
 {
   "boot-source": {
-    "kernel_image_path": "./vmlinux",
+    "kernel_image_path": "/usr/local/share/marmalade/vmlinux",
     "boot_args": "console=ttyS0 reboot=k panic=1 pci=off",
     "initrd_path": null
   },
@@ -21,8 +10,8 @@ ip netns exec marmalade ./firecracker --api-sock /tmp/firecracker.socket --confi
       "partuuid": null,
       "is_root_device": true,
       "cache_type": "Unsafe",
-      "is_read_only": false,
-      "path_on_host": "./generator_base.ext4",
+      "is_read_only": true,
+      "path_on_host": "/usr/local/share/marmalade/generator_base.ext4",
       "io_engine": "Sync",
       "rate_limiter": null,
       "socket": null
@@ -50,5 +39,3 @@ ip netns exec marmalade ./firecracker --api-sock /tmp/firecracker.socket --confi
   "mmds-config": null,
   "entropy": null
 }
-EOF
-)

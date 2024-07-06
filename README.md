@@ -103,16 +103,6 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
 5. The generator instance reads the state of the jame and produces audio and sets tags accordingly.
 6. The generator instance keeps running until it stops itself, or until the jam ends.
 
-### Firecracker Isolation and Communication
-
-Eventually, generators will probably be written in a standard language. Maybe Mégra, maybe [RestrictedPython](https://restrictedpython.readthedocs.io/en/latest/), maybe something we come up with ourselves. Until then, just for fun, we make the player run the generators, which are arbitrary executables, inside a Firecracker microVM.
-
-Our current setup creates a base image (based on the minimal Alpine linux docker image) that firecracker can run, with a local init script that expects a tgz file on port `2468`. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine, which it uses to read the state of the jam, write tags, and produce audio.
-
-Running the Firecracker microVM requires root access, so the player uses a tiny executable with a `setuid` bit that creates a new tap device, configures it, modifies some firewall rules, and launches Firecracker as root. For added security and convenience, the binary only runs for users named "marmalade", and sets up all of the above in a separate network namespace also named "marmalade".
-
-TODO: currently we have full network access, for development purposes, but it's just a matter of in `iptable` command. Also, this whole thing is really embryonic and under active development.
-
 ## Player Directory Structure
 
 ```
@@ -152,6 +142,22 @@ TODO: currently we have full network access, for development purposes, but it's 
       - `<Redis files>`: the Redis aof and rdb files for the jam. This is the single source of truth for the local state of the jam.
 - `players/` contains information about all the players the local player has ever known.
   - `<player ID>.lisp` contains the player's public key, address, and last seen time.
+
+## Firecracker Isolation and Communication
+
+Eventually, generators will probably be written in a standard language. Maybe Mégra, maybe [RestrictedPython](https://restrictedpython.readthedocs.io/en/latest/), maybe something we come up with ourselves. Until then, just for fun, we make the player run the generators, which are arbitrary executables, inside a Firecracker microVM.
+
+Our current setup creates a base image (based on the minimal Alpine linux docker image) that firecracker can run, with a local init script that requests a tgz file on port `2468`. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine, which it uses to read the state of the jam, write tags, and produce audio. Once we get that stabled out, we should probably move to snapshots of the machine to save some overhead.
+
+Running the Firecracker microVM requires root access, and so does configuring the network. Moreover, all those interfaces and iptables rules to connect all the running generators to a local redis server are best kept in separate network namespaces, which also require root access. As does removing each namespace when it is no longer needed. In short, to run generators in a safe and isolated manner, root access is required.
+
+ Since running the player as root is not many people's cup of tea, Marmalade installs a tiny binary helper with setuid permissions. The helper is set to be executable by users belonging to the "marmalade" group, and performs a very specific set of tasks in the following order:
+ 1. Set uid to uid 0, effectively becoming root
+ 2. If given the `--start-jam` flag, along with a jam name, create a new network namespace named `marmalade:<jam-name>` and run a Redis server inside it as the original calling user (presumably the one running the player) and using the jam's persistence directory as described above. If the namespace already exists it exits with an appropriate error message.
+ 3. If given  the `--launch-generator` flag, along with a jam name, player ID, generator name, and instance ID, create a new network namespace named `marmalade:<jam-name>:<player ID>:<generator name>:<instance ID>`, connect it to the Redis namespace, run a Firecracker microVM inside it, and send it the generator archive from the workdir described above. If the namespace already exists it exits with an appropriate error message.
+ 4. If given the `--stop-jam` flag, along with a jam name, stop the Redis server running in the `marmalade:<jam-name>` namespace, delete the namespace, and then do the same thing with any remaining `marmalade:<jam-name>:*` namespaces and the Firefox instances running inside them.
+
+ For details, take a look at `firecracker/marmalade-nslaunch.sh` (you may also want to verify that `firecracker/marmalade-nslaunch.c`, required because most OSs ignore setuid bits on non-binary files, is a pretty direct translation of the shell script).
 
 ## Requirements
 

@@ -1,5 +1,2 @@
-/firecracker/firecracker
-/firecracker/generator_base.ext4
-/firecracker/marmalade-generator-run
-/firecracker/vmlinux
+/firecracker/build/
 /workdir/*/
