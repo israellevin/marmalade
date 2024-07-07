@@ -63,11 +63,11 @@ curl -XPOST "http://localhost:2468/play/$jam/$generator/$instance" --data "( \
 
 ## Generators and State
 
-To postpone the decision of how to actually produce audio, and to keep generators as agnostic as possible, they are currently implemented simply as a directory with at least one executable file, which is packed into a tgz file and sent to the player that wants to run it. The generator can then read the state of the jam, set tags, and produce audio accordingly.
+Eventually, generators will probably be written in some a standard language, probably something we will come up with ourselves (see [producing audio](#producing-audio) below), hopefully something lispish.
 
-To keep things safe and standard, the Marmalade player sticks that directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, and runs the first executable file in that directory.
+For now, in order to postpone the decision of how to actually produce audio and because its fun, we keep the generators highly agnostic and implement them as directories packed into tgz files. To run a generator, the player unpacks the tgz file into a directory, enters it, and runs the first executable file it finds, providing it with the state of the jam and the ability to set tags and produce audio accordingly.
 
-Each generator gets a full virtual machine it can run stuff on, receiving a quota of CPU and memory, and a network connection through which it can query the state, set tags, and produce audio.
+To keep things safe and standard, this should happen inside some kind of sandboxed virtual machine (see [Generator Isolation and Communication](#generator-isolation-and-communication) below).
 
 ### Access to the State
 
@@ -86,7 +86,7 @@ The ID of the player and the generator instance will be embedded in the path of 
 
 ### Producing Audio
 
-The generator function should be able to produce any kind of audio, synthesized or sampled - a single note, a bar, a riff, and silences of different durations. One way to acheive this is to give the generator instances access to the player's sound system, and let them write raw audio data to it. This is certainly the most versatile and efficient way to produce audio, but it's also harder to code and debug. Other options include:
+The generator should be able to produce any kind of audio, synthesized or sampled - a single note, a bar, a riff, and silences of different durations. One way to acheive this is to give the generator instances access to the player's sound system, and let them write raw audio data to it. This is certainly the most versatile and efficient way to produce audio, but it's also harder to code and debug. Other options include:
 - **[Mégra](https://megra-doc.readthedocs.io/en/latest/tutorial/organizing-sound/)** just looks awesome. Requires Jack or PipeWire, but holy shit, it looks awesome.
 - **[Supercollider](https://supercollider.github.io/)** is very impressive, seems to be very widely supported and something of an industry standard. Seems to require more setup.
 - **[cl-patterns](https://github.com/defaultxr/cl-patterns)** is built on top of Supercollider and does it cooler and lispier.
@@ -143,11 +143,13 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
 - `players/` contains information about all the players the local player has ever known.
   - `<player ID>.lisp` contains the player's public key, address, and last seen time.
 
-## Firecracker Isolation and Communication
+## Generator Isolation and Communication
 
-Eventually, generators will probably be written in a standard language. Maybe Mégra, maybe [RestrictedPython](https://restrictedpython.readthedocs.io/en/latest/), maybe something we come up with ourselves. Until then, just for fun, we make the player run the generators, which are arbitrary executables, inside a Firecracker microVM.
+Generators are currently just directories with arbitrary executables. The Marmalade player, in yet another attempt to keep things as ridiculously agnostic, the player verifies the signatures, downloads and generator and creates the required nodes in the workdir, but the actual responsibility of running the generators is delegated to a shell script, giving it only the name of the jam, the player ID, the generator name, and the instance ID.
 
-Our current setup creates a base image (based on the minimal Alpine linux docker image) that firecracker can run, with a local init script that requests a tgz file on port `2468`. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine, which it uses to read the state of the jam, write tags, and produce audio. Once we get that stabled out, we should probably move to snapshots of the machine to save some overhead.
+The current working version of the script simply unpacks the directory into its place in the workdir and runs the first executable file it finds. This branch is dedicated to sticking that directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, so that each generator gets a full virtual machine it can run stuff on, receiving a quota of CPU and memory, and a network connection to Redis through which it can query the state, set tags, and produce audio.
+
+The root filesystem of the Firecracker microVM is based on the minimal Alpine linux docker image, with a local init script that sets up the network and requests a tgz file on port `2468`. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine. Once we get that stabled out, we should probably move to snapshots of the machine to save some overhead.
 
 Running the Firecracker microVM requires root access, and so does configuring the network. Moreover, all those interfaces and iptables rules to connect all the running generators to a local redis server are best kept in separate network namespaces, which also require root access. As does removing each namespace when it is no longer needed. In short, to run generators in a safe and isolated manner, root access is required.
 
@@ -173,9 +175,13 @@ Running the Firecracker microVM requires root access, and so does configuring th
   4. Run `(quicklisp-quickstart:install)`
   5. Run `(ql:add-to-init-file)`
   6. Create a symbolic link to this repository in the `local-projects` directory of the quicklisp home directory with `ln -s <full path to repository> <full path to quicklisp home>/local-projects/marmalade`
-- [Firecracker](https://firecracker-microvm.github.io/) setup
-  1. Run the `firecracker/prepare.sh` script (which requires `bash`, `curl`, `jq`, and some basic GNU utilities) - you should end up with the Firecracker binary, a kernel image and a root filesystem image which can receive and run a generator in a standard, secure and isolated environment
-  2. Make and install the setuid wrapper for the tap device with a `make` command in the `firecracker` directory
+- Compatible [Firecracker](https://firecracker-microvm.github.io/) setup
+  1. Run the `firecracker/prepare.sh` script (which requires `bash`, `curl`, `jq`, and some basic GNU utilities) - you should end up with four files:
+    1. A `firecracker` microVM binary
+    2. A `vmlinux` kernel
+    3. A `marmalade-nslaunch` binary
+    4. A `rootfs.ext4` root filesystem image configured to receive and run a generator in a standard, secure and isolated environment
+  2. Run `sudo make install` to safely install the build artifacts on your system
 
 ## Running Marmalade
 

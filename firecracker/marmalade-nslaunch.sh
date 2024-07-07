@@ -14,7 +14,7 @@ usage() {
 start_jam() {
     local jam_namespace="$NAMESPACE_PREFIX:$1"
     # Exit if the namespace already exists.
-    ip netns list | grep -q "^$jam_namespace " && exit 1
+    ip netns list | grep -q "^$jam_namespace *" && exit 1
     # Create the namespace.
     ip netns add "$jam_namespace"
     # Set up the loopback interface.
@@ -38,28 +38,30 @@ increment_ip() {
 next_veth() {
     local jam_namespace="$NAMESPACE_PREFIX:$1"
     # Exit if the jam namespace does not exist.
-    ip netns list | grep -q "^$jam_namespace " || exit 1
+    ip netns list | grep -q "^$jam_namespace *" || exit 1
     # Get the highest numbered prefixed interface in the namespace.
     local max_veth=$(ip netns exec "$jam_namespace" ip -o link show | cut -d' ' -f2 | \
-        grep "^$VETH_PREFIX[0-9]\+:" | sort -n | tail -1 | head -c-2)
+        grep -o "^$VETH_PREFIX[0-9]\+@" | sort -n | tail -1 | head -c-2)
     if ! [ "$max_veth" ]; then
         echo "$VETH_PREFIX"'0 10.24.68.0 10.24.68.1'
         return
     fi
+    local max_veth_number=${max_veth:${#VETH_PREFIX}}
+    local new_generator_ifname="$VETH_PREFIX$((max_veth_number + 1))"
     local max_ip=$(ip netns exec "$jam_namespace" ip -o addr show "$max_veth" | \
         grep -o "10\.[0-9]\+\.[0-9]\+\.[0-9]\+")
-    local new_generator_veth=$(increment_ip $max_ip)
-    local new_jam_veth=$(increment_ip $new_generator_veth)
-    echo "$VETH_PREFIX$new_generator_veth $new_generator_veth $new_jam_veth"
+    local new_generator_ip=$(increment_ip $max_ip)
+    local new_jam_ip=$(increment_ip $new_generator_ip)
+    echo "$new_generator_ifname $new_generator_ip $new_jam_ip"
 }
 
 launch_generator() {
     local jam_namespace="$NAMESPACE_PREFIX:$1"
     # Exit if the jam namespace does not exist.
-    ip netns list | grep -q "^$jam_namespace " || exit 1
+    ip netns list | grep -q "^$jam_namespace *" || exit 1
     local generator_namespace="$jam_namespace:$2:$3:$4"
     # Exit if the generator namespace already exists.
-    ip netns list | grep -q "^$generator_namespace " && exit 1
+    ip netns list | grep -q "^$generator_namespace *" && exit 1
 
     # Create the namespace.
     ip netns add "$generator_namespace"
@@ -75,7 +77,7 @@ launch_generator() {
     ip link set "$jam_veth_name" netns "$jam_namespace"
     ip netns exec "$jam_namespace" ip link set "$jam_veth_name" up
     ip netns exec "$generator_namespace" ip link set "$generator_veth_name" up
-    ip netns exec "$jam_namespace" ip addr add "$jam_veth_ip/31" dev "$jam_veth_name"
+    ip netns exec "$jam_namespace" ip addr add $jam_veth_ip/31 dev "$jam_veth_name"
     ip netns exec "$generator_namespace" ip addr add "$generator_veth_ip/31" dev "$generator_veth_name"
 
     # Set up a tap interface in the generator namespace for the Firecracker VM.
@@ -83,12 +85,19 @@ launch_generator() {
     ip netns exec "$generator_namespace" ip link set tap0 up
     ip netns exec "$generator_namespace" ip addr add 172.16.0.1/24 dev tap0
 
+    # Forward the Redis server port for standard access.
+    ip netns exec "$generator_namespace" sysctl -w net.ipv4.ip_forward=1
+    ip netns exec "$generator_namespace" iptables -t nat -A PREROUTING \
+        -d 172.16.0.1 -p tcp --dport 6379 -j DNAT --to- $jam_veth_ip:6379
+    ip netns exec "$generator_namespace" iptables -t nat -A POSTROUTING \
+        -d $jam_veth_ip -p tcp --dport 6379 -j MASQUERADE
+
     # "Serve" the generator itself.
-    busybox nc -lp2468 < "./generators/$2:$3.tgz" &
+    ip netns exec "$generator_namespace" busybox nc -lp2468 < "./generators/$2:$3.tgz" &
 
     # Run the Firecracker VM.
     ip netns exec "$generator_namespace" /usr/local/bin/firecracker \
-        --config-file /usr/local/share/marmalade/firecracker_config.json \
+        --config-file /usr/local/etc/marmalade/firecracker_config.json \
         --api-sock "./jams/$1/$2/$3/$4/firecracker.sock"
 
     # Clean up.

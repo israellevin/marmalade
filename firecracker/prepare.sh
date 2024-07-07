@@ -10,7 +10,7 @@ get_firecracker() {
     echo Getting Firecracker
     if [ ! -x firecracker ]; then
         echo "Downloading Firecracker"
-        curl -L "$FIRECRACKER_RELEASE_URL" | tar xz --wildcards 'release-*/firecracker-*x86_64'
+        curl -fL "$FIRECRACKER_RELEASE_URL" | tar xz --wildcards 'release-*/firecracker-*x86_64'
         find ./release-* -type f -executable -exec mv {} firecracker \;
         rm -rf release-*
     fi
@@ -20,19 +20,19 @@ get_vmlinux() {
     echo Getting vmlinux
     if [ ! -f vmlinux ]; then
         echo "Downloading vmlinux"
-        curl -L https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.9/x86_64/vmlinux-5.10.217 > vmlinux
+        curl -fL https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.9/x86_64/vmlinux-6.1.96 -o vmlinux
     fi
 }
 
 extract_docker_image_to_directory() {
     echo Extracting Docker image
-    token=$(curl -s "$IMAGE_URL" | jq -r .token)
+    token=$(curl -sfL "$IMAGE_URL" | jq -r .token)
     mkdir rootfs
-    curl -s "$MANIFEST_URL" \
+    curl -sfL "$MANIFEST_URL" \
         -H "Authorization: Bearer $token" \
         -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' | jq -r '.layers[].digest' | \
             while read digest; do
-                curl -sLH "Authorization: Bearer $token" \
+                curl -fLH "Authorization: Bearer $token" \
                     "https://registry-1.docker.io/v2/library/$IMAGE/blobs/$digest" | tar -xzC rootfs/
             done
 }
@@ -63,13 +63,14 @@ exec > /generator/setup.log 2>&1
 ip addr add 172.16.0.2/24 dev eth0
 ip link set eth0 up
 ip route add default via 172.16.0.1 dev eth0
-#echo ok | nc 172.16.0.1 2468 | tar -xzC /generator
-#for file in /generator/*; do
-#    if [ -x "$file" ]; then
-#        exec "$file"
-#        exit $?
-#    fi
-#done
+echo ok | nc 172.16.0.1 2468 | tar -xzC /generator
+cd /generator
+for file in *; do
+    if [ -x "$file" ]; then
+        exec "./$file"
+        exit $?
+    fi
+done
 EOF
 }
 

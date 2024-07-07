@@ -1,6 +1,6 @@
 # Define variables
 BIN_DIR = /usr/local/bin
-ASSETS_DIR = /usr/local/share/marmalade
+ASSETS_DIR = /usr/local/etc/marmalade
 BUILD_DIR = build
 
 all: install

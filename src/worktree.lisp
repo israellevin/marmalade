@@ -5,6 +5,11 @@
 (defvar *generators-directory* (merge-pathnames #p"generators/" *work-directory*))
 (defvar *jams-directory* (merge-pathnames #p"jams/" *work-directory*))
 (defvar *players-directory* (merge-pathnames #p"players/" *work-directory*))
+(defvar *generator-runner-path* (merge-pathnames #p"run_generator.sh" *work-directory*))
+(unless (uiop:directory-exists-p *work-directory*) (error "Work directory ~A does not exist." *work-directory*))
+(unless (uiop:file-exists-p *config-file-path*) (error "Config file ~A does not exist." *config-file-path*))
+(unless (uiop:file-exists-p *generator-runner-path*)
+  (error "Generator runner ~A does not exist." *generator-runner-path*))
 
 (ensure-directories-exist *generators-directory*)
 (ensure-directories-exist *jams-directory*)
