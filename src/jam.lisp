@@ -14,7 +14,7 @@
 
 (defun jam-connect (jam-name)
   "Connects to a (potentially new) jam with the specified name."
-  (let ((jam-path (merge-pathnames jam-name *jams-directory*)))
+  (let ((jam-path (merge-pathnames (format nil "~A/" jam-name) *jams-directory*)))
     (ensure-directories-exist jam-path)
     (make-jam-log jam-path)
     (jam-log (format nil "Starting jam ~A." jam-name))

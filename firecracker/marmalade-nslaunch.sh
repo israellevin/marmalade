@@ -25,6 +25,7 @@ start_jam() {
 }
 
 increment_ip() {
+    # Just a simple IPv4 address incrementer.
     local -a octets
     IFS='.' read -r -a octets <<< "$1"
     for (( i=3; i>=0; i-- )); do
@@ -36,6 +37,7 @@ increment_ip() {
 }
 
 next_veth() {
+    # Get the next veth interface name and IP addresses for the generator.
     local jam_namespace="$NAMESPACE_PREFIX:$1"
     # Exit if the jam namespace does not exist.
     ip netns list | grep -q "^$jam_namespace *" || exit 1
@@ -137,23 +139,30 @@ stop_jam() {
     ip netns delete "$jam_namespace"
 }
 
-[ $# -eq 0 ] && usage 1 || while [ $# -gt 0 ]; do
-    case $1 in
-        --help)
-            usage 0
-            ;;
-        --start-jam|--stop-jam)
-            [ $# -lt 2 ] && usage 1
-            [ $1 == "--start-jam" ] && start_jam "$2" || stop_jam "$2"
-            shift 2
-            ;;
-        --launch-generator)
-            [ $# -lt 5 ] && usage 1
-            launch_generator "$2" "$3" "$4" "$5"
-            shift 5
-            ;;
-        *)
-            usage 1
-            ;;
-    esac
-done
+cli_handler() {
+    [ $# -eq 0 ] && usage 1 || while [ $# -gt 0 ]; do
+        case $1 in
+            --help)
+                usage 0
+                ;;
+            --start-jam|--stop-jam)
+                [ $# -lt 2 ] && usage 1
+                [ $1 == "--start-jam" ] && start_jam "$2" || stop_jam "$2"
+                shift 2
+                ;;
+            --launch-generator)
+                [ $# -lt 5 ] && usage 1
+                launch_generator "$2" "$3" "$4" "$5"
+                shift 5
+                ;;
+            *)
+                usage 1
+                ;;
+        esac
+    done
+}
+
+# If the script is sourced, return without executing.
+[ "$BASH_SOURCE" == "$0" ] || return 0
+
+cli_handler "$@"
