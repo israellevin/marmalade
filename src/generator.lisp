@@ -30,17 +30,9 @@
            (generator-name (second generator-parts)))
           (cons generator-id `(:name ,generator-name :player ,player-id))))) *generators-directory*))
 
-(defun run-first-executable-in-path (path)
-  "Iterate over the files in the specified path and run the first executable found."
-  (dolist (file (uiop:directory-files path))
-    (when (getf
-            (org.shirakumo.file-attributes:decode-attributes (org.shirakumo.file-attributes:attributes file))
-            :owner-execute)
-      (uiop:launch-program (namestring file)))))
-
 (defun play-generator (jam-name generator-name instance-id address public-key-string signature-B64)
   "Plays the generator with the specified ID."
-  (unless (string= *current-jam* jam-name) (error "Not connected to jam ~A." jam-name))
+  (unless (string= *jam-name* jam-name) (error "Not connected to jam ~A." jam-name))
   (let* ((player-id
            (validate-play-request jam-name generator-name instance-id address public-key-string signature-B64))
          (player (get-player player-id)))
@@ -48,11 +40,12 @@
            (generator-archive-path (get-generator-archive-path generator-id))
            (generator-working-path
              (reduce (lambda (path part) (merge-pathnames (format nil "~A/" part) path))
-                     (list *current-jam* player-id generator-name instance-id)
+                     (list *jam-name* player-id generator-name instance-id)
                      :initial-value *jams-directory*)))
       (when (eq generator-archive-path nil) (download-generator generator-id))
-      (if (uiop:directory-exists-p generator-working-path)
+      (when (uiop:directory-exists-p generator-working-path)
           (error "Instance ~A of generator ~A has already been run." instance-id generator-name))
+      (jam-log (format nil "Playing generator ~A." generator-name))
       (ensure-directories-exist generator-working-path)
-      (uiop:run-program (format nil "tar -xzf ~A -C ~A" generator-archive-path generator-working-path))
-      (run-first-executable-in-path generator-working-path))))
+      (uiop:run-program (format nil "marmalade-nslaunch --launch-generator '~A' '~A' '~A' '~A' &"
+                                jam-name player-id generator-name instance-id)))))
