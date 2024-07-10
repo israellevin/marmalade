@@ -145,22 +145,23 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
 
 ## Generator Isolation and Communication
 
-Generators are currently just directories with arbitrary executables. The Marmalade player, in yet another attempt to keep things as ridiculously agnostic, the player verifies the signatures, downloads and generator and creates the required nodes in the workdir, but the actual responsibility of running the generators is delegated to a shell script, giving it only the name of the jam, the player ID, the generator name, and the instance ID.
+Generators are currently just directories with arbitrary executables which the player sticks into a directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, so that each generator gets a full virtual machine to can run stuff on, receiving a quota of CPU and memory, and a network connection to Redis through which it can query the state, set tags, and produce audio.
 
-The current working version of the script simply unpacks the directory into its place in the workdir and runs the first executable file it finds. This branch is dedicated to sticking that directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, so that each generator gets a full virtual machine it can run stuff on, receiving a quota of CPU and memory, and a network connection to Redis through which it can query the state, set tags, and produce audio.
+TODO: We don't have quota's set on the Firecracker configuration, nor do we have permissions set on Redis yet - should add ACLs to allow each generator to write to its own namespace in the state, and read from the entire state.
 
-TODO: We don't have permissions set on Redis yet - should add ACLs to allow each generator to write to its own namespace in the state, and read from the entire state.
+The root filesystem of the Firecracker microVM is based on the [minimal Alpine linux docker image](https://hub.docker.com/_/alpine/), with a local init script that sets up the network and requests a tgz file on port `2468` from its host. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine.
 
-The root filesystem of the Firecracker microVM is based on the minimal Alpine linux docker image, with a local init script that sets up the network and requests a tgz file on port `2468`. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine. Once we get that stabled out, we should probably move to snapshots of the machine to save some overhead.
+TODO: We should probably move to Firecracker snapshots of the machine to save some overhead, instead of booting a new machine every time.
 
 Running the Firecracker microVM requires root access, and so does configuring the network. Moreover, all those interfaces and iptables rules to connect all the running generators to a local redis server are best kept in separate network namespaces, which also require root access. As does removing each namespace when it is no longer needed. In short, to run generators in a safe and isolated manner, root access is required.
 
-Since running the player as root is not many people's cup of tea, Marmalade installs a little helper script that can be run as root by members of the `marmalade` group and performs a very specific set of tasks in the following order:
+Since running the player as root is not many people's cup of tea, Marmalade installs a little helper script that can be run as root by members of the `marmalade` group and performs one of three specific sets of tasks:
  1. If given the `--start-jam` flag, along with a jam name, create a new network namespace named `marmalade:<jam-name>` and run a Redis server inside it as the original calling user (presumably the one running the player) and using the jam's persistence directory as described above. If the namespace already exists it exits with an appropriate error message.
 2. If given  the `--launch-generator` flag, along with a jam name, player ID, generator name, and instance ID, create a new network namespace named `marmalade:<jam-name>:<player ID>:<generator name>:<instance ID>`, connect it to the Redis namespace, run a Firecracker microVM inside it, and send it the generator archive from the workdir described above. If the namespace already exists it exits with an appropriate error message.
 3. If given the `--stop-jam` flag, along with a jam name, stop the Redis server running in the `marmalade:<jam-name>` namespace, delete the namespace, and then do the same thing with any remaining `marmalade:<jam-name>:*` namespaces and the Firefox instances running inside them.
+For details, take a look at `firecracker/marmalade-nslaunch`.
 
-For details, take a look at `firecracker/marmalade-nslaunch.sh`.
+An interesting upshot of this is that if we want to move to another virtualization technology ([LXC](https://linuxcontainers.org/) is the only real compatitor right now), we can just modify the `marmalade-nslaunch` script to run something else under the same newtork namespace isolation and the player will keep running as before.
 
 ## Requirements
 
@@ -178,7 +179,7 @@ For details, take a look at `firecracker/marmalade-nslaunch.sh`.
     6. Create a symbolic link to this repository in the `local-projects` directory of the quicklisp home directory with `ln -s <full path to repository> <full path to quicklisp home>/local-projects/marmalade`
 - Compatible [Firecracker](https://firecracker-microvm.github.io/) setup
     1. Inside the `firecracker` directory, run `make build` (which requires `make`, `bash`, `curl`, `jq`, `mkfs.ext4` and some basic GNU utilities; as well as root priviliges while building the rootfs image for chrooting - you will be prompted for your sudo password)
-    2. Still inside the `firecracker` directory run `sudo make install` to safely install the build artifacts on your system - this will automatically create the `marmalade` group and add the current user to it, and give the `marmalade` group the necessary permissions to run the `marmalade-nslaunch.sh` script as root
+    2. Still inside the `firecracker` directory run `sudo make install` to safely install the build artifacts on your system - this will automatically create the `marmalade` group and add the current user to it, and give the `marmalade` group the necessary permissions to run the `marmalade-nslaunch` script as root
     3. Optionally, run `sudo make marmalade-group <username1> <username2> ...` to add additional users to the `marmalade` group
 
 ## Running Marmalade
@@ -203,7 +204,7 @@ This will open a lisp REPL in which you can run commands, so start by running th
 
 To create a generator, you need to prepare a directory (anywhere on your filesystem) in which the first executable file is the entry point of your generator (see an example inside `workdir/sample_generator`, and then run `(marmalade:pack-generator "<path to generator directory>")` in the REPL. This will create a generator archive file in the `generators/` directory and thus register the generator, which you can verify by refreshing the `generators` endpoint. This will also provide you with the generator ID, composed of your player ID and the name of the generator directory you prepared. Once you have the generator ID, you can verify that its available for download by other players by visiting the `generator/<generator ID>` endpoint on your browser.
 
-Before you run a generator, you need to start a jam by running `(marmalade:jam-connect "<jam name>")` in the REPL. This will create a directory with the name of the jam inside the `jams/` directory, containing a `jam.log` file and a Redis persistence directory.
+Before you run a generator, you need to start a jam by running `(marmalade:start-jam "<jam name>")` in the REPL. This will create a directory with the name of the jam inside the `jams/` directory, containing a `jam.log` file and a Redis persistence directory.
 
 Now you should be able to ask the local player to run the generator using:
 ```lisp
@@ -211,7 +212,7 @@ Now you should be able to ask the local player to run the generator using:
 ```
 The generator name should be the name of the generator directory you prepared, and the instance ID should be unique for each run of the generator. Note that the generator name is not the generator ID, which is the generator name prefixed by the player ID (in this case, the ID of the local player).
 
-There are also `(marmalade:jam-disconnect "<jam name>")` and `(marmalade:stop-p2p-server)` functions that you can run in the REPL to stop the jam and the server, respectively, although the servers will also stop automatically if you exit the REPL.
+There are also `(marmalade:stop-jam "<jam name>")` and `(marmalade:stop-p2p-server)` functions that you can run in the REPL to stop the jam and the server, respectively, although the servers will also stop automatically if you exit the REPL.
 
 ## Thoughts
 

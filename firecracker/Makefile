@@ -29,17 +29,17 @@ marmalade-group:
 	done
 
 	sudo bash -c \
-		'echo "%$(GROUP_NAME) ALL=(ALL) NOPASSWD: /usr/local/bin/marmalade-nslaunch.sh" > /etc/sudoers.d/$(GROUP_NAME)'
+		'echo "%$(GROUP_NAME) ALL=(ALL) NOPASSWD: /usr/local/bin/marmalade-nslaunch" > /etc/sudoers.d/$(GROUP_NAME)'
 
 install:
 	[ -d $(BUILD_DIR) ] || make build
 	make marmalade-group
 	sudo mkdir -p $(BIN_DIR)
 	sudo cp $(BUILD_DIR)/firecracker $(BIN_DIR)
-	sudo cp marmalade-nslaunch.sh $(BIN_DIR)
+	sudo cp marmalade-nslaunch $(BIN_DIR)/marmalade-nslaunch
 	sudo chmod 550 \
 		$(BIN_DIR)/firecracker \
-		$(BIN_DIR)/marmalade-nslaunch.sh
+		$(BIN_DIR)/marmalade-nslaunch
 	sudo mkdir -p $(ASSETS_DIR)
 	sudo cp $(BUILD_DIR)/vmlinux $(ASSETS_DIR)
 	sudo cp $(BUILD_DIR)/generator_base.ext4 $(ASSETS_DIR)
@@ -50,14 +50,14 @@ install:
 		$(ASSETS_DIR)/firecracker_config.json
 	sudo chown root:marmalade \
 		$(BIN_DIR)/firecracker \
-		$(BIN_DIR)/marmalade-nslaunch.sh \
+		$(BIN_DIR)/marmalade-nslaunch \
 		$(ASSETS_DIR)/firecracker_config.json \
 		$(ASSETS_DIR)/generator_base.ext4 \
 		$(ASSETS_DIR)/vmlinux
 
 uninstall:
 	sudo rm -f $(BIN_DIR)/firecracker
-	sudo rm -f $(BIN_DIR)/marmalade-nslaunch.sh
+	sudo rm -f $(BIN_DIR)/marmalade-nslaunch
 	sudo rm -f $(ASSETS_DIR)/firecracker_config.json
 	sudo rm -f $(ASSETS_DIR)/generator_base.ext4
 	sudo rm -f $(ASSETS_DIR)/vmlinux

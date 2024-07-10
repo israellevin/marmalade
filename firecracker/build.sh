@@ -65,8 +65,8 @@ echo ok | nc 172.16.0.1 2468 | tar -xzC /generator
 cd /generator
 for file in *; do
     if [ -x "$file" ]; then
-        exec "./$file"
-        exit $?
+        "./$file"
+        reboot
     fi
 done
 EOF

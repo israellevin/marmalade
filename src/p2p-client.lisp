@@ -41,9 +41,9 @@
 
 (defun request-play (player-id generator-name instance-id)
   "Requests the specified generator to be played by the specified player."
-  (let ((signature (sign-play-request *current-jam* generator-name instance-id *player-address*)))
+  (let ((signature (sign-play-request *jam-name* generator-name instance-id *player-address*)))
     (request-from-player
-      player-id (format nil "play/~A/~A/~A" *current-jam* generator-name instance-id) :post
+      player-id (format nil "play/~A/~A/~A" *jam-name* generator-name instance-id) :post
       (prin1-to-string
         `((:signature . ,signature)
           (:pubkey . ,*player-public-key-string*)

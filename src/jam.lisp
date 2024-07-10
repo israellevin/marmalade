@@ -2,31 +2,31 @@
 
 (in-package :marmalade)
 
-(defvar *current-jam* nil)
+(defvar *jam-name* nil)
+(defvar *jam-path* nil)
+(defvar *jam-log-path* nil)
 
-(defun make-jam-log (jam-directory)
-  (org.shirakumo.verbose:restart-global-controller)
-  (org.shirakumo.verbose:define-pipe
-    () (org.shirakumo.verbose:file-faucet :file (merge-pathnames #P"jam.log" jam-directory))))
+(defun jam-log (message &optional (log-file-path *jam-log-path*))
+  "Logs a message to the jam log."
+  (unless log-file-path (error "Not connected to a jam."))
+  (with-open-file (log-file log-file-path :direction :output :if-does-not-exist :create :if-exists :append)
+    (format log-file "~A ~A~%" (get-universal-time) message)))
 
-(defun jam-log (message &optional (level :info))
-  (org.shirakumo.verbose:log level :jam message))
-
-(defun jam-connect (jam-name)
-  "Connects to a (potentially new) jam with the specified name."
-  (let ((jam-path (merge-pathnames (format nil "~A/" jam-name) *jams-directory*)))
+(defun start-jam (jam-name)
+  "Connects to a jam with the specified name."
+  (let* ((jam-path (merge-pathnames (format nil "~A/" jam-name) *jams-directory*))
+         (jam-log-path (merge-pathnames #P"jam.log" jam-path)))
     (ensure-directories-exist jam-path)
-    (make-jam-log jam-path)
-    (jam-log (format nil "Starting jam ~A." jam-name))
-    (uiop:launch-program (format nil "~A --dir ~A --save '' --appendonly yes --appenddirname redis"
-                                 (get-config :redis-command) jam-path))
-    (setf *current-jam* jam-name))
-  (push #'jam-disconnect sb-ext:*exit-hooks*)
-  (sleep 0.1)
-  (redis:connect))
+    (jam-log (format nil "connecting to jam ~A" jam-name) jam-log-path)
+    (uiop:launch-program (format nil "marmalade-nslaunch --start-jam '~A'" jam-name))
+    (setf *jam-name* jam-name)
+    (setf *jam-path* jam-path)
+    (setf *jam-log-path* jam-log-path))
+  (push #'stop-jam sb-ext:*exit-hooks*))
 
-(defun jam-disconnect ()
+(defun stop-jam ()
   "Disconnects from the current jam."
-  (red:shutdown)
-  (redis:disconnect)
-  (setf sb-ext:*exit-hooks* (remove #'jam-disconnect sb-ext:*exit-hooks*)))
+  (unless *jam-name* (error "Not connected to a jam."))
+  (jam-log (format nil "disconnecting from jam ~A." *jam-name*))
+  (uiop:launch-program (format nil "marmalade-nslaunch --stop-jam '~A'" *jam-name*))
+  (setf sb-ext:*exit-hooks* (remove #'stop-jam sb-ext:*exit-hooks*)))
