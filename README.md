@@ -87,10 +87,11 @@ The ID of the player and the generator instance will be embedded in the path of 
 ### Producing Audio
 
 The generator should be able to produce any kind of audio, synthesized or sampled - a single note, a bar, a riff, and silences of different durations. One way to acheive this is to give the generator instances access to the player's sound system, and let them write raw audio data to it. This is certainly the most versatile and efficient way to produce audio, but it's also harder to code and debug. Other options include:
-- **[Mégra](https://megra-doc.readthedocs.io/en/latest/tutorial/organizing-sound/)** just looks awesome. Requires Jack or PipeWire, but holy shit, it looks awesome.
-- **[Supercollider](https://supercollider.github.io/)** is very impressive, seems to be very widely supported and something of an industry standard. Seems to require more setup.
-- **[cl-patterns](https://github.com/defaultxr/cl-patterns)** is built on top of Supercollider and does it cooler and lispier.
-- **[Sonic Pi](https://sonic-pi.net/)** is something else we can learn from.
+- **[Mégra](https://megra-doc.readthedocs.io/en/latest/tutorial/organizing-sound/)** just looks awesome. Can use Jack or PipeWire, and holy shit, it looks awesome.
+- **[Supercollider](https://supercollider.github.io/)** is very impressive, seems to be very widely supported and something of an industry standard. Seems to require more setup, and while able to work with PipeWire, requires Jack anyway.
+- **[cl-patterns](https://github.com/defaultxr/cl-patterns)** is built on top of Supercollider and does it cooler and lispier. Seems a bit immature.
+- **[Tidal Cycles](http://tidalcycles.org)** is also built on top of Supercollider but goes the Haskell way. Seems the most mature.
+- **[Sonic Pi](https://sonic-pi.net/)** is also built on top of Supercollider, is very cool, and although it is built on Ruby it's still something we can learn from.
 
 For all these options we will use Redis pub-sub to deliver the musical notation from generator to player. We can even use Redis's expiration mechanism to avoid playing sounds if the player hasn't gotten around to playing them in time.
 
@@ -214,6 +215,19 @@ The generator name should be the name of the generator directory you prepared, a
 
 There are also `(marmalade:stop-jam "<jam name>")` and `(marmalade:stop-p2p-server)` functions that you can run in the REPL to stop the jam and the server, respectively, although the servers will also stop automatically if you exit the REPL.
 
+## Plans
+
+Currently, the player supports only commands to start and stop the jam, to create and run generators, and to communicate with other players. Other functionality that would be nice to have includes:
+- Allowing and disallowing participants (currently the player will play whatever generators are requested of it, regardless of the source)
+- Controlling the Master Volume, and the volume/max volume of individual tracks and generators (including muting and soloing)
+- Controlling the tempo of the jam (which includes the ability to pause it)
+- A GUI, probably web-based, instead of the REPL
+- Visualizing the state of the jam, the generators and the tags; both in real-time and historically
+
+In addition, there is a bunch of data that the local player should push into the state.
+
+Oh, and our Redis setup still lacks permissions, just like our Firecracker setup still lacks quotas.
+
 ## Thoughts
 
 ### Schedule
@@ -223,3 +237,13 @@ Maybe we create an evolving potential structure of a jam, represented as a direc
 ### Events
 
 Maybe we want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state, and Redis has great pub-sub support.
+
+Specifically, it seems that a some sort of "wait untill the state is X" operation can come in real handy, and easily be implemented with a pub-sub mechanism - with or without the local player's assistance.
+
+### Permissioned Operations
+
+Maybe some audio related operations should be restricted, or even completely disabled. For example, assuming we are using something like Tidal to produce audio, we will probably need to restrict the `hush` operation, which stops all audio, and `setcps`, which changes the tempo of the entire jam.
+
+However, maybe we will want to allow certain generators - an obvious candidate being the generators of the local player that's actually running the jam - to perform such restricted operations.
+
+In the same way, generators should generally be able to set tags only in their own namespace, but maybe we will want to allow certain generators to set tags in other namespaces, or even in the root namespace.
