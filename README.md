@@ -123,7 +123,8 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
         ...
       ...
       redis/
-        <Redis files>
+        auth
+        <Redis persistency files>
   players/
     <player ID>.lisp
     ...
@@ -140,7 +141,8 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
                         - `<instance ID>/`: working directory for a single instance of the generator played in the jam.
                             - `firecracker.socket`: the socket controlling the generator's VM.
     - `redis/`: a Redis persistence directory for the jam.
-        - `<Redis files>`: the Redis aof and rdb files for the jam. This is the single source of truth for the local state of the jam.
+        - `auth`: the Redis password for the jam.
+        - `<Redis persistency files>`: the Redis aof and rdb files for the jam. This is the single source of truth for the local state of the jam.
 - `players/` contains information about all the players the local player has ever known.
     - `<player ID>.lisp` contains the player's public key, address, and last seen time.
 
@@ -150,7 +152,7 @@ Generators are currently just directories with arbitrary executables which the p
 
 TODO: We don't have quota's set on the Firecracker configuration, nor do we have permissions set on Redis yet - should add ACLs to allow each generator to write to its own namespace in the state, and read from the entire state.
 
-The root filesystem of the Firecracker microVM is based on the [minimal Alpine linux docker image](https://hub.docker.com/_/alpine/), with a local init script that sets up the network and requests a tgz file on port `2468` from its host. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine.
+The root filesystem of the Firecracker microVM is based on the [minimal Alpine linux docker image](https://hub.docker.com/_/alpine/), with a local init script that sets up the network and requests a redis config file on port `1234` and a tgz file on port `2468` from its host. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory, with a `redis.conf` file inside it, containing the user and the password. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine.
 
 TODO: We should probably move to Firecracker snapshots of the machine to save some overhead, instead of booting a new machine every time.
 
@@ -158,7 +160,7 @@ Running the Firecracker microVM requires root access, and so does configuring th
 
 Since running the player as root is not many people's cup of tea, Marmalade installs a little helper script that can be run as root by members of the `marmalade` group and performs one of three specific sets of tasks:
  1. If given the `--start-jam` flag, along with a jam name, create a new network namespace named `marmalade:<jam-name>` and run a Redis server inside it as the original calling user (presumably the one running the player) and using the jam's persistence directory as described above. If the namespace already exists it exits with an appropriate error message.
-2. If given  the `--launch-generator` flag, along with a jam name, player ID, generator name, and instance ID, create a new network namespace named `marmalade:<jam-name>:<player ID>:<generator name>:<instance ID>`, connect it to the Redis namespace, run a Firecracker microVM inside it, and send it the generator archive from the workdir described above. If the namespace already exists it exits with an appropriate error message.
+2. If given  the `--launch-generator` flag, along with a jam name, player ID, generator name, and instance ID, create a new network namespace named `marmalade:<jam-name>:<player ID>:<generator name>:<instance ID>`, connect it to the Redis namespace, run a Firecracker microVM inside it, and send it its redis credentials and the generator archive from the workdir described above. If the namespace already exists it exits with an appropriate error message.
 3. If given the `--stop-jam` flag, along with a jam name, stop the Redis server running in the `marmalade:<jam-name>` namespace, delete the namespace, and then do the same thing with any remaining `marmalade:<jam-name>:*` namespaces and the Firefox instances running inside them.
 For details, take a look at `install/marmalade-nslaunch`.
 
@@ -226,7 +228,7 @@ Currently, the player supports only commands to start and stop the jam, to creat
 
 In addition, there is a bunch of data that the local player should push into the state.
 
-Oh, and our Redis setup still lacks permissions, just like our Firecracker setup still lacks quotas.
+Oh, and our Redis setup still lacks permissions, just like our Firecracker setup still lacks quotas. And documenting the sample generator ain't a bad idea either.
 
 ## Thoughts
 

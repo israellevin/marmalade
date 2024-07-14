@@ -2,47 +2,80 @@
 NAMESPACE_PREFIX=marmalade
 VETH_PREFIX=gen.veth.
 
+# Report an error.
+error() {
+    echo "error: $1" 1>&2
+    exit ${2:-1}
+}
+
 usage() {
-    echo -en "Usage:\n" \
+    error "$(echo -en "Usage:\n" \
         "$0 --start-jam <jam name>\n" \
         "$0 --launch-generator <jam name> <player ID> <generator name> <instance ID>\n" \
         "$0 --stop-jam <jam name>\n" \
-        "$0 --help\n"
-    exit $1
+        "$0 --help\n")" $1
 }
 
-start_jam() {
+# Check if the given namespace exists.
+does_exist() {
+    ip netns list | grep -q "^$1 *" && return 0 || return 1
+}
+
+# Create a new network namespace with the given name and raise the loopback interface.
+# Exit with an error if the namespace already exists.
+create_namespace() {
+    ip netns list | does_exist "$1" && error "namespace $1 already exists"
+    ip netns add "$1"
+    ip netns exec "$1" ip link set lo up && return 0
+    echo error "failed to initialize namespace $1"
+}
+
+# Given the jam name, return the namespace name, or exit with an error if it does not exist.
+# Given an additional truthy argument, create the namespace and return its name, or error if it already exists.
+get_jam_namespace() {
     local jam_namespace="$NAMESPACE_PREFIX:$1"
-    # Exit if the namespace already exists.
-    ip netns list | grep -q "^$jam_namespace *" && exit 1
-    # Create the namespace.
-    ip netns add "$jam_namespace"
-    # Set up the loopback interface.
-    ip netns exec "$jam_namespace" ip link set lo up
-    # Launch the Redis server.
-    ip netns exec "$jam_namespace" \
-        redis-server --dir "./jams/$1" --save '' --appendonly yes --appenddirname redis --daemonize yes --protected-mode no
+    local should_create="$2"
+    if [ "$should_create" ]; then
+        create_namespace "$jam_namespace"
+    elif ! does_exist "$jam_namespace"; then
+        error "namespace $jam_namespace does not exist"
+    fi
+    echo "$jam_namespace"
 }
 
+# Get a strong random password.
+generate_password() {
+    tr -dc 'a-za-z0-9' < /dev/urandom | head -c 32
+}
+
+# Start a jam.
+start_jam() {
+    local jam_namespace="$(get_jam_namespace "$1" create)"
+    echo "created namespace $jam_namespace"
+    local redis_password=$(generate_password)
+    mkdir -p "./jams/$1/redis"
+    echo "$redis_password" > "./jams/$1/redis/auth"
+    ip netns exec "$jam_namespace" \
+        redis-server --daemonize yes --requirepass "$redis_password" \
+            --dir "./jams/$1" --save '' --appendonly yes --appenddirname redis
+    echo "redis server started in namespace $jam_namespace"
+}
+
+# Just a simple IPv4 address incrementer for creating more and more veth interfaces for the generators.
 increment_ip() {
-    # Just a simple IPv4 address incrementer.
     local -a octets
     IFS='.' read -r -a octets <<< "$1"
     for (( i=3; i>=0; i-- )); do
         [ $((++octets[i])) -lt 256 ] && break
-        [ $i -eq 0 ] && echo "Error: IP address overflow" && exit 1
+        [ $i -eq 0 ] && error "IP address overflow"
         octets[i]=0
     done
     echo "${octets[0]}.${octets[1]}.${octets[2]}.${octets[3]}"
 }
 
+# Get the next available veth interface name in the given namespace, and two matching available IP addresses.
 next_veth() {
-    # Get the next veth interface name and IP addresses for the generator.
-    local jam_namespace="$NAMESPACE_PREFIX:$1"
-    # Exit if the jam namespace does not exist.
-    ip netns list | grep -q "^$jam_namespace *" || exit 1
-    # Get the highest numbered prefixed interface in the namespace.
-    local max_veth=$(ip netns exec "$jam_namespace" ip -o link show | cut -d' ' -f2 | \
+    local max_veth=$(ip netns exec "$1" ip -o link show | cut -d' ' -f2 | \
         grep -o "^$VETH_PREFIX[0-9]\+@" | sort -n | tail -1 | head -c-2)
     if ! [ "$max_veth" ]; then
         echo "$VETH_PREFIX"'0 10.24.68.0 10.24.68.1'
@@ -50,30 +83,24 @@ next_veth() {
     fi
     local max_veth_number=${max_veth:${#VETH_PREFIX}}
     local new_generator_ifname="$VETH_PREFIX$((max_veth_number + 1))"
-    local max_ip=$(ip netns exec "$jam_namespace" ip -o addr show "$max_veth" | \
+    local max_ip=$(ip netns exec "$1" ip -o addr show "$max_veth" | \
         grep -o "10\.[0-9]\+\.[0-9]\+\.[0-9]\+")
     local new_generator_ip=$(increment_ip $max_ip)
     local new_jam_ip=$(increment_ip $new_generator_ip)
     echo "$new_generator_ifname $new_generator_ip $new_jam_ip"
 }
 
+# Launch a generator.
 launch_generator() {
-    local jam_namespace="$NAMESPACE_PREFIX:$1"
-    # Exit if the jam namespace does not exist.
-    ip netns list | grep -q "^$jam_namespace *" || exit 1
-    local generator_namespace="$jam_namespace:$2:$3:$4"
-    # Exit if the generator namespace already exists.
-    ip netns list | grep -q "^$generator_namespace *" && exit 1
-
-    # Create the namespace.
-    ip netns add "$generator_namespace"
-    # Set up the loopback interface.
-    ip netns exec "$generator_namespace" ip link set lo up
+    local jam_namespace="$(get_jam_namespace "$1")"
+    local generator_namespace="$jam_namespace:$2"
+    does_exist "$generator_namespace" && error "namespace $generator_namespace already exists"
+    create_namespace "$generator_namespace"
 
     # Set up a veth pair between the generator namespace and the jam namespace.
     local generator_veth_name="jam.veth0"
     local jam_veth_name generator_veth_ip jam_veth_ip
-    read jam_veth_name generator_veth_ip jam_veth_ip <<< $(next_veth "$1")
+    read jam_veth_name generator_veth_ip jam_veth_ip <<< $(next_veth "$jam_namespace")
     ip link add "$generator_veth_name" type veth peer name "$jam_veth_name"
     ip link set "$generator_veth_name" netns "$generator_namespace"
     ip link set "$jam_veth_name" netns "$jam_namespace"
@@ -94,7 +121,13 @@ launch_generator() {
     ip netns exec "$generator_namespace" iptables -t nat -A POSTROUTING \
         -d $jam_veth_ip -p tcp --dport 6379 -j MASQUERADE
 
-    # "Serve" the generator itself.
+    # set a password for the redis server.
+    redis_password=$(generate_password)
+    ip netns exec "$jam_namespace" redis-cli -a "$(cat ./jams/$1/redis/auth)" \
+        acl setuser "$generator_namespace" on ">$redis_password" "~*" "+@all"
+
+    # "serve" both the redis credentials and the generator itself.
+    echo -e "$generator_namespace\n$redis_password" | ip netns exec "$generator_namespace" busybox nc -lp1234 &
     ip netns exec "$generator_namespace" busybox nc -lp2468 < "./generators/$2:$3.tgz" &
 
     # Run the Firecracker VM.
@@ -112,30 +145,30 @@ safely_delete_generator_namespace() {
     if [ "$pids" ]; then
         # If there is something other than the Firecracker VM running, return an error.
         ps -ocmd= -p $pids | grep -qv "/usr/local/bin/firecracker" && \
-            echo "Error: running processes in namespace $1" && return 1
+            error "running processes in namespace $1"
         # Kill the Firecracker VM.
         kill $pids
         # Wait for the VM to die.
         sleep 1
         # Verify the namespace is clean.
         [ "$(ip netns pids "$1")" ] && \
-            echo "Error: running processes in namespace $1" && return 1
+            error "running processes in namespace $1"
     fi
     # Delete the namespace.
     ip netns delete "$1"
 }
 
 stop_jam() {
-    local jam_namespace="$NAMESPACE_PREFIX:$1"
-    ip netns exec "$jam_namespace" redis-cli shutdown
+    local jam_namespace="$(get_jam_namespace "$1")"
+    ip netns exec "$jam_namespace" redis-cli -a "$(cat ./jams/$1/redis/auth)" shutdown
     [ "$(ip netns pids "$jam_namespace")" ] && \
-        echo "Error: running processes in namespace $jam_namespace" && exit 1
+        error "found running processes in namespace $jam_namespace"
     for netns in $(ip netns list | cut -d' ' -f1 | grep "^$jam_namespace:"); do
         safely_delete_generator_namespace "$netns" &
     done
     wait
     ip netns list | grep "^$jam_namespace:" && \
-        echo "Error: failed to delete all generator namespaces connected to $jam_namespace" && exit 1
+        error "failed to delete all generator namespaces connected to $jam_namespace"
     ip netns delete "$jam_namespace"
 }
 
@@ -165,4 +198,10 @@ cli_handler() {
 # If the script is sourced, return without executing.
 [ "$BASH_SOURCE" == "$0" ] || return 0
 
+
+# Make sure the script is run as root.
+if [ ! $EUID = 0 ]; then
+    sudo $0 "$@"
+    exit
+fi
 cli_handler "$@"

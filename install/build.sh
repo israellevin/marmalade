@@ -61,6 +61,7 @@ exec > /generator/setup.log 2>&1
 ip addr add 172.16.0.2/24 dev eth0
 ip link set eth0 up
 ip route add default via 172.16.0.1 dev eth0
+echo ok | nc 172.16.0.1 1234 > /generator/redis.conf
 echo ok | nc 172.16.0.1 2468 | tar -xzC /generator
 cd /generator
 for file in *; do
