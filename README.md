@@ -148,11 +148,11 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
 
 ## Generator Isolation and Communication
 
-Generators are currently just directories with arbitrary executables which the player sticks into a directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, so that each generator gets a full virtual machine to can run stuff on, receiving a quota of CPU and memory, and a network connection to Redis through which it can query the state, set tags, and produce audio.
+Generators are currently just directories with arbitrary executables which the player sticks into a directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, so that each generator gets a full virtual machine to can run stuff on, receiving a quota of CPU and memory, and a connection to Redis through which it can query the state, set tags, and produce audio.
 
-TODO: We don't have quota's set on the Firecracker configuration, nor do we have permissions set on Redis yet - should add ACLs to allow each generator to write to its own namespace in the state, and read from the entire state.
+TODO: We don't have quota's set on the Firecracker configuration.
 
-The root filesystem of the Firecracker microVM is based on the [minimal Alpine linux docker image](https://hub.docker.com/_/alpine/), with a local init script that sets up the network and requests a redis config file on port `1234` and a tgz file on port `2468` from its host. Once a tgz file is received, the init script extracts it to a tmpfs and runs the first executable file in the directory, with a `redis.conf` file inside it, containing the user and the password. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine.
+The root filesystem of the Firecracker microVM is based on the [minimal Alpine linux docker image](https://hub.docker.com/_/alpine/), with a local init script that sets up the network and requests redis credentials on port `1234` and a tgz file on port `2468` from its host. Once the streams are received, the init script extracts the generator to a tmpfs, along with a file containing the credentials, and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine.
 
 TODO: We should probably move to Firecracker snapshots of the machine to save some overhead, instead of booting a new machine every time.
 
@@ -228,7 +228,7 @@ Currently, the player supports only commands to start and stop the jam, to creat
 
 In addition, there is a bunch of data that the local player should push into the state.
 
-Oh, and our Redis setup still lacks permissions, just like our Firecracker setup still lacks quotas. And documenting the sample generator ain't a bad idea either.
+Oh, and our Firecracker setup still lacks quotas, and documenting the sample generator ain't a bad idea either.
 
 ## Thoughts
 

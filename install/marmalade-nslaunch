@@ -93,7 +93,8 @@ next_veth() {
 # Launch a generator.
 launch_generator() {
     local jam_namespace="$(get_jam_namespace "$1")"
-    local generator_namespace="$jam_namespace:$2"
+    local generator_id="$2:$3:$4"
+    local generator_namespace="$jam_namespace:$generator_id"
     does_exist "$generator_namespace" && error "namespace $generator_namespace already exists"
     create_namespace "$generator_namespace"
 
@@ -124,10 +125,10 @@ launch_generator() {
     # set a password for the redis server.
     redis_password=$(generate_password)
     ip netns exec "$jam_namespace" redis-cli -a "$(cat ./jams/$1/redis/auth)" \
-        acl setuser "$generator_namespace" on ">$redis_password" "~*" "+@all"
+        ACL SETUSER $generator_id ON ">$redis_password" RESETKEYS ~$generator_id:* %R~* +@all -@dangerous
 
     # "serve" both the redis credentials and the generator itself.
-    echo -e "$generator_namespace\n$redis_password" | ip netns exec "$generator_namespace" busybox nc -lp1234 &
+    echo -e "$generator_id\n$redis_password" | ip netns exec "$generator_namespace" busybox nc -lp1234 &
     ip netns exec "$generator_namespace" busybox nc -lp2468 < "./generators/$2:$3.tgz" &
 
     # Run the Firecracker VM.
@@ -160,7 +161,7 @@ safely_delete_generator_namespace() {
 
 stop_jam() {
     local jam_namespace="$(get_jam_namespace "$1")"
-    ip netns exec "$jam_namespace" redis-cli -a "$(cat ./jams/$1/redis/auth)" shutdown
+    ip netns exec "$jam_namespace" redis-cli -a "$(cat ./jams/$1/redis/auth)" SHUTDOWN
     [ "$(ip netns pids "$jam_namespace")" ] && \
         error "found running processes in namespace $jam_namespace"
     for netns in $(ip netns list | cut -d' ' -f1 | grep "^$jam_namespace:"); do
