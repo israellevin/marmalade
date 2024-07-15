@@ -6,7 +6,7 @@
 
 (defun get-player-id (key)
   "Returns the player ID from a given SSH key."
-  (subseq (ssh-keys:fingerprint :sha256 key) 0 8))
+  (substitute #\_ #\/ (subseq (ssh-keys:fingerprint :sha256 key) 0 8)))
 
 (defun get-key-text (key)
   "Returns the SSH textual representation of a given SSH key."
