@@ -65,7 +65,7 @@ curl -XPOST "http://localhost:2468/play/$jam/$generator/$instance" --data "( \
 
 Eventually, generators will probably be written in some a standard language, probably something we will come up with ourselves (see [producing audio](#producing-audio) below), hopefully something lispish.
 
-For now, in order to postpone the decision of how to actually produce audio and because its fun, we keep the generators highly agnostic and implement them as directories packed into tgz files. To run a generator, the player unpacks the tgz file into a directory, enters it, and runs the first executable file it finds, providing it with the state of the jam and the ability to set tags and produce audio accordingly.
+For now, in order to postpone the decision of how to actually produce audio and because its fun, we keep the generators highly agnostic and implement them as directories packed into tgz files. To run a generator, the player unpacks the tgz file into a directory, enters it, and runs the executable files it finds, providing the processes with access the state of the jam and the ability to set tags and produce audio accordingly.
 
 To keep things safe and standard, this should happen inside some kind of sandboxed virtual machine (see [Generator Isolation and Communication](#generator-isolation-and-communication) below).
 
@@ -152,7 +152,7 @@ Generators are currently just directories with arbitrary executables which the p
 
 TODO: We don't have quota's set on the Firecracker configuration.
 
-The root filesystem of the Firecracker microVM is based on the [minimal Alpine linux docker image](https://hub.docker.com/_/alpine/), with a local init script that sets up the network and requests redis credentials on port `1234` and a tgz file on port `2468` from its host. Once the streams are received, the init script extracts the generator to a tmpfs, along with a file containing the credentials, and runs the first executable file in the directory. The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine.
+The root filesystem of the Firecracker microVM is based on the [minimal Alpine linux docker image](https://hub.docker.com/_/alpine/), with a local init script that sets up the network and requests redis credentials on port `1234` and a tgz file on port `2468` from its host. Once the streams are received, the init script extracts the generator to a tmpfs, along with a file containing the credentials, and runs all the executable files it finds in the directory, one by one, in alphabetical order (stopping if any executable exits with a non-zero return code). The generator runs as root on the virtual machine, and the only external access it has is to the Redis port on the host machine.
 
 TODO: We should probably move to Firecracker snapshots of the machine to save some overhead, instead of booting a new machine every time.
 
