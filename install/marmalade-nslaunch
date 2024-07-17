@@ -30,9 +30,13 @@ create_namespace() {
     echo error "failed to initialize namespace $1"
 }
 
-# Given the jam name, return the namespace name, or exit with an error if it does not exist.
-# Given an additional truthy argument, create the namespace and return its name, or error if it already exists.
-get_jam_namespace() {
+# Given the jam name, set the global JAM_NAMESPACE variable accordingly.
+# By default, ensure the namespace exists, exiting with an error if it does not.
+# Given an additional truthy argument, it tries to create the namespace, exiting with an error if it already exists.
+# Using the global variable instead of returning the name avoids having to run
+# the function in a subshell in order to capture the output, which would mean
+# an error in the function would only exit the subshell.
+set_jam_namespace() {
     local jam_namespace="$NAMESPACE_PREFIX:$1"
     local should_create="$2"
     if [ "$should_create" ]; then
@@ -40,7 +44,7 @@ get_jam_namespace() {
     elif ! does_exist "$jam_namespace"; then
         error "namespace $jam_namespace does not exist"
     fi
-    echo "$jam_namespace"
+    JAM_NAMESPACE="$jam_namespace"
 }
 
 # Get a strong random password.
@@ -50,15 +54,15 @@ generate_password() {
 
 # Start a jam.
 start_jam() {
-    local jam_namespace="$(get_jam_namespace "$1" create)"
-    echo "created namespace $jam_namespace"
+    set_jam_namespace "$1" create
+    echo "created namespace $JAM_NAMESPACE"
     local redis_password=$(generate_password)
     mkdir -p "./jams/$1/redis"
     echo "$redis_password" > "./jams/$1/redis/auth"
-    ip netns exec "$jam_namespace" \
+    ip netns exec "$JAM_NAMESPACE" \
         redis-server --daemonize yes --requirepass "$redis_password" \
             --dir "./jams/$1" --save '' --appendonly yes --appenddirname redis
-    echo "redis server started in namespace $jam_namespace"
+    echo "redis server started in namespace $JAM_NAMESPACE"
 }
 
 # Just a simple IPv4 address incrementer for creating more and more veth interfaces for the generators.
@@ -92,22 +96,22 @@ next_veth() {
 
 # Launch a generator.
 launch_generator() {
-    local jam_namespace="$(get_jam_namespace "$1")"
+    set_jam_namespace "$1"
     local generator_id="$2:$3:$4"
-    local generator_namespace="$jam_namespace:$generator_id"
+    local generator_namespace="$JAM_NAMESPACE:$generator_id"
     does_exist "$generator_namespace" && error "namespace $generator_namespace already exists"
     create_namespace "$generator_namespace"
 
     # Set up a veth pair between the generator namespace and the jam namespace.
     local generator_veth_name="jam.veth0"
     local jam_veth_name generator_veth_ip jam_veth_ip
-    read jam_veth_name generator_veth_ip jam_veth_ip <<< $(next_veth "$jam_namespace")
+    read jam_veth_name generator_veth_ip jam_veth_ip <<< $(next_veth "$JAM_NAMESPACE")
     ip link add "$generator_veth_name" type veth peer name "$jam_veth_name"
     ip link set "$generator_veth_name" netns "$generator_namespace"
-    ip link set "$jam_veth_name" netns "$jam_namespace"
-    ip netns exec "$jam_namespace" ip link set "$jam_veth_name" up
+    ip link set "$jam_veth_name" netns "$JAM_NAMESPACE"
+    ip netns exec "$JAM_NAMESPACE" ip link set "$jam_veth_name" up
     ip netns exec "$generator_namespace" ip link set "$generator_veth_name" up
-    ip netns exec "$jam_namespace" ip addr add $jam_veth_ip/31 dev "$jam_veth_name"
+    ip netns exec "$JAM_NAMESPACE" ip addr add $jam_veth_ip/31 dev "$jam_veth_name"
     ip netns exec "$generator_namespace" ip addr add "$generator_veth_ip/31" dev "$generator_veth_name"
 
     # Set up a tap interface in the generator namespace for the Firecracker VM.
@@ -124,7 +128,7 @@ launch_generator() {
 
     # set a password for the redis server.
     redis_password=$(generate_password)
-    ip netns exec "$jam_namespace" redis-cli -a "$(cat ./jams/$1/redis/auth)" \
+    ip netns exec "$JAM_NAMESPACE" redis-cli -a "$(cat ./jams/$1/redis/auth)" \
         ACL SETUSER $generator_id ON ">$redis_password" RESETKEYS ~$generator_id:* %R~* +@all -@dangerous
 
     # "serve" both the redis credentials and the generator itself.
@@ -160,17 +164,17 @@ safely_delete_generator_namespace() {
 }
 
 stop_jam() {
-    local jam_namespace="$(get_jam_namespace "$1")"
-    ip netns exec "$jam_namespace" redis-cli -a "$(cat ./jams/$1/redis/auth)" SHUTDOWN
-    [ "$(ip netns pids "$jam_namespace")" ] && \
-        error "found running processes in namespace $jam_namespace"
-    for netns in $(ip netns list | cut -d' ' -f1 | grep "^$jam_namespace:"); do
+    set_jam_namespace "$1"
+    ip netns exec "$JAM_NAMESPACE" redis-cli -a "$(cat ./jams/$1/redis/auth)" SHUTDOWN
+    [ "$(ip netns pids "$JAM_NAMESPACE")" ] && \
+        error "found running processes in namespace $JAM_NAMESPACE"
+    for netns in $(ip netns list | cut -d' ' -f1 | grep "^$JAM_NAMESPACE:"); do
         safely_delete_generator_namespace "$netns" &
     done
     wait
-    ip netns list | grep "^$jam_namespace:" && \
-        error "failed to delete all generator namespaces connected to $jam_namespace"
-    ip netns delete "$jam_namespace"
+    ip netns list | grep "^$JAM_NAMESPACE:" && \
+        error "failed to delete all generator namespaces connected to $JAM_NAMESPACE"
+    ip netns delete "$JAM_NAMESPACE"
 }
 
 cli_handler() {
