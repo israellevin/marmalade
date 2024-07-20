@@ -179,7 +179,7 @@ An interesting upshot of this is that if we want to move to another virtualizati
     3. Optionally, set the quicklisp home directory with `(setf quicklisp-quickstart::*home* "<full path to quicklisp home>")`
     4. Run `(quicklisp-quickstart:install)`
     5. Run `(ql:add-to-init-file)`
-    6. Create a symbolic link to this repository in the `local-projects` directory of the quicklisp home directory with `ln -s <full path to repository>/marmalade <full path to quicklisp home>/local-projects/marmalade`
+    6. Create a symbolic link to the client lisp package in the `local-projects` directory of the quicklisp home directory with `ln -s <full path to repository>/client <full path to quicklisp home>/local-projects/marmalade`
 - Compatible [Firecracker](https://firecracker-microvm.github.io/) setup
     1. Inside the `install` directory, run `make build` (which requires `make`, `bash`, `curl`, `jq`, `mkfs.ext4` and some basic GNU utilities; as well as root priviliges while building the rootfs image for chrooting - you will be prompted for your sudo password)
     2. Still inside the `install` directory run `sudo make install` to safely install the build artifacts on your system - this will automatically create the `marmalade` group and add the current user to it, and give the `marmalade` group the necessary permissions to run the `marmalade-nslaunch` script as root
