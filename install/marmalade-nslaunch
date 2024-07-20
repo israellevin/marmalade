@@ -129,7 +129,8 @@ launch_generator() {
     # set a password for the redis server.
     redis_password=$(generate_password)
     ip netns exec "$JAM_NAMESPACE" redis-cli -a "$(cat ./jams/$1/redis/auth)" \
-        ACL SETUSER $generator_id ON ">$redis_password" RESETKEYS ~$generator_id:* %R~* +@all -@dangerous
+        ACL SETUSER $generator_id ON ">$redis_password" RESETKEYS RESETCHANNELS \
+        "&$generator_id:*" '+psubscribe|*' '%R~*' +@all -@dangerous
 
     # "serve" both the redis credentials and the generator itself.
     echo -e "$generator_id\n$redis_password" | ip netns exec "$generator_namespace" busybox nc -lp1234 &

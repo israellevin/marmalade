@@ -18,8 +18,16 @@ nc_pid=$!
 cat redis-pipe > redis-out &
 cat_pid=$!
 exec 3>redis-in
+
 redis() { echo "$*" > redis-in && tail -1 redis-out; }
 redis "auth $generator_id $password"
-
-tag() { redis "set '$generator_id:$1' '$2'"; }
+tag() { redis "publish '$generator_id:tags:$1' '$2'"; }
 tag "loaded at" "$(date)"
+sound() { redis "publish '$generator_id:sound' '$*'"; }
+for i in $(seq 2); do
+    sound 'play an awesome drum break'
+    tag 'drum break' 'on'
+    sleep 1
+    tag 'drum break' 'off'
+    sleep 2
+done
