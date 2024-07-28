@@ -6,7 +6,7 @@
   :author "I. <root@chakra>"
   :licence "Public Domain"
   :depends-on ("cl-base64" "cl-ssh-keys" "dexador" "ironclad" "quri" "s-http-server" "split-sequence" "uiop")
-  :pathname "src"
+  :pathname "."
   :components (
                (:file "configuration" :depends-on ("package"))
                (:file "crypto" :depends-on ("package" "player"))
