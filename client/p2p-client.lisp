@@ -8,17 +8,18 @@
     (format nil "~A/~A" (getf (get-player player-id) :address) endpoint)
     :method method :content data :keep-alive nil))
 
-(defun request-form (player-id endpoint &optional (method :get) (data nil))
-  "Make a request to a player and return the form data."
-  (read-from-string (request player-id endpoint method data)))
+(defun request-json-as-plists (player-id endpoint &optional (method :get) (data nil))
+  "Make a request to a player and convert the JSON response to a list of plists."
+  (loop for hash-table across (com.inuoe.jzon:parse (request player-id endpoint method data))
+        collect (loop for key being the hash-keys of hash-table using (hash-value value) append (list key value))))
 
 (defun request-players (player-id)
   "Requests the list of players from the specified player."
-  (request-form player-id "players"))
+  (request-json-as-plists player-id "players"))
 
 (defun request-generators (player-id)
   "Requests the list of generators from the specified player."
-  (request-form player-id "generators"))
+  (request-json-as-plists player-id "generators"))
 
 (defun request-generator (player-id generator-id)
   "Requests the specified generator from the specified player and download it."
@@ -42,9 +43,7 @@
 (defun request-play (player-id generator-name instance-id)
   "Requests the specified generator to be played by the specified player."
   (let ((signature (sign-play-request *jam-name* generator-name instance-id *player-address*)))
-    (request
-      player-id (format nil "play/~A/~A/~A" *jam-name* generator-name instance-id) :post
-      (prin1-to-string
-        `((:signature . ,signature)
-          (:pubkey . ,*player-public-key-string*)
-          (:address . ,*player-address*))))))
+    (request player-id (format nil "play/~A/~A/~A" *jam-name* generator-name instance-id) :post
+             `(("signature" . ,signature)
+               ("pubkey" . ,*player-public-key-string*)
+               ("address" . ,*player-address*)))))

@@ -43,7 +43,6 @@ Players, as stated above, are identified by their public keys. The software curr
 If you want to request a player to play a generator on your own, you can use curl and OpenSSL. To begin, however, you will need to use the `ssh-keygen` command to convert your keys from the OpenSSH format (which is what our software currently works with) to PEM format (which is used by OpenSSL):
 ```sh
 cp ~/.ssh/id_rsa id_rsa.pem                       # Assuming your private key is in ~/.ssh/id_rsa
-ssh-keygen -f id_rsa.pem -empem > id_rsa.pub.pem  # Get your public key
 yes | ssh-keygen -f id_rsa.pem -pmpem             # To convert the private key you have to re-encrypt it in place
 ```
 
@@ -54,11 +53,10 @@ generator="generator"
 instance="instance"
 address="address"
 signature="$(echo -n "$jam:$generator:$instance:$address" | \
-    openssl dgst -sha256 -sign id_rsa.pem -binary | openssl base64 -A)"
-curl -XPOST "http://localhost:2468/play/$jam/$generator/$instance" --data "( \
-    (:signature . \"$signature\") \
-    (:pubkey . \"$(cat ~/.ssh/id_rsa.pub)\") \
-    (:address . \"$address\"))"
+    openssl dgst -sha256 -sign id_rsa.pem -binary | openssl base64 -A | jq -sRrj @uri)"
+pubkey="$(cat ~/.ssh/id_rsa.pub | jq -sRrj @uri)"
+curl -XPOST "http://localhost:2468/play/$jam/$generator/$instance" \
+    --data "pubkey=$pubkey&signature=$signature&address=$address"
 ```
 
 ## Generators and State

@@ -28,7 +28,7 @@
            (generator-parts (split-generator-id generator-id))
            (player-id (first generator-parts))
            (generator-name (second generator-parts)))
-          (cons generator-id `(:name ,generator-name :player ,player-id))))) *generators-directory*))
+          `(:id ,generator-id :name ,generator-name :player ,player-id)))) *generators-directory*))
 
 (defun play-generator (jam-name generator-name instance-id address public-key-string signature-B64)
   "Plays the generator with the specified ID."

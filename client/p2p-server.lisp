@@ -2,12 +2,12 @@
 
 (in-package :marmalade)
 
-(defun text-response (content http-request response-stream
-                              &key (status 200) (response-string "OK") (mime "text/plain"))
+(defun text-response
+  (content http-request response-stream &key (status 200) (response-string "OK") (mime "text/plain"))
   "Generate and write an HTTP text response."
   (when response-stream
-    (s-http-server:write-http-response-status-line response-stream status response-string
-                                                   (s-http-server:get-http-version http-request))
+    (s-http-server:write-http-response-status-line
+      response-stream status response-string (s-http-server:get-http-version http-request))
     (s-http-server:write-http-response-headers
       (s-http-server:standard-http-response-headers
         http-request
@@ -18,11 +18,22 @@
     (write-string content response-stream)
     (length content)))
 
-(defun plists-response (plists http-request response-stream
-                               &key (status 200) (response-string "OK") (mime "text/lisp"))
-  "Generate and write an HTTP response representing a list of plists as a lisp form."
-  (text-response (prin1-to-string plists)
-                 http-request response-stream :status status :response-string response-string :mime mime))
+(defun plist-to-hash-table (plist)
+  "Convert a plist to a hash table."
+  (let ((hash-table (make-hash-table :test 'equal)))
+    (loop for (key value) on plist by #'cddr do (setf (gethash key hash-table) value)) hash-table))
+
+(defun plists-response
+  (plists http-request response-stream &key (status 200) (response-string "OK") (mime "application/json"))
+  "Generate and write an HTTP response representing a list of plists as JSON."
+  (text-response
+    (com.inuoe.jzon:stringify (mapcar #'plist-to-hash-table plists))
+    http-request response-stream :status status :response-string response-string :mime mime))
+
+(defun get-parameter-reader (request-body)
+  "Get a reader function for reading post parameters from a url-encoded request body."
+  (let ((params (quri:uri-query-params (quri:uri (format nil "?~A" request-body)))))
+    #'(lambda (key) (cdr(assoc key params :test #'string=)))))
 
 (defun network-request-handler (server handler http-request response-stream)
   "Handles requests."
@@ -49,12 +60,12 @@
                (generator-name (fourth path-parts))
                (instance-id (fifth path-parts))
                (length (s-utils:parse-integer-safely (s-http-server:request-header-value http-request :content-length)))
-               (content (make-string length)))
-          (read-sequence content response-stream)
-          (let* ((payload (read-from-string content))
-                 (address (cdr (assoc :address payload)))
-                 (pubkey (cdr (assoc :pubkey payload)))
-                 (signature (cdr (assoc :signature payload))))
+               (body (make-string length)))
+          (read-sequence body response-stream)
+          (let* ((parameter-reader (get-parameter-reader body))
+                 (address (funcall parameter-reader "address"))
+                 (pubkey (funcall parameter-reader "pubkey"))
+                 (signature (funcall parameter-reader "signature")))
             (play-generator jam-name generator-name instance-id address pubkey signature)
             (text-response "OK" http-request response-stream))))
       (t (s-http-server:standard-http-html-error-response

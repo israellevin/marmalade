@@ -5,7 +5,8 @@
   :version "0.0.1"
   :author "I. <root@chakra>"
   :licence "Public Domain"
-  :depends-on ("cl-base64" "cl-ssh-keys" "dexador" "ironclad" "quri" "s-http-server" "split-sequence" "uiop")
+  :depends-on ("cl-base64" "cl-ssh-keys" "com.inuoe.jzon" "dexador"
+               "ironclad" "quri" "s-http-server" "split-sequence" "uiop")
   :pathname "."
   :components (
                (:file "configuration" :depends-on ("package"))

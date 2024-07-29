@@ -8,17 +8,15 @@
 
 (defun get-player (player-id)
   "Returns data of player with the specified ID."
-  (let ((path (player-pathname player-id))) (if (uiop:file-exists-p path) (uiop:read-file-form path) nil)))
+  (let ((path (player-pathname player-id)))
+    (when (uiop:file-exists-p path) (list* :id player-id (uiop:safe-read-file-form path)))))
 
 (defun get-players ()
   "Returns the list of players."
   (directory-map
     (lambda (file-properties)
       (when (string= (getf file-properties :extension) "lisp")
-        (let* ((player-id (getf file-properties :basename))
-               (player (get-player player-id)))
-          (when player (cons player-id player)))))
-    *players-directory*))
+        (get-player (getf file-properties :basename)))) *players-directory*))
 
 (defun upsert-player (player-id public-key address)
   "Upserts a player with the specified ID, public key and address."
