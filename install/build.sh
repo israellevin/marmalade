@@ -5,7 +5,11 @@ TAG=latest
 IMAGE_URL="https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/$IMAGE:pull"
 MANIFEST_URL="https://registry-1.docker.io/v2/library/$IMAGE/manifests/$TAG"
 FIRECRACKER_RELEASE_BASE_URL="https://github.com/firecracker-microvm/firecracker/releases/download"
-FIRECRACKER_RELEASE_URL="$FIRECRACKER_RELEASE_BASE_URL/v1.7.0/firecracker-v1.7.0-x86_64.tgz"
+FIRECRACKER_VERSION="v1.8.0"
+FIRECRACKER_RELEASE_URL="$FIRECRACKER_RELEASE_BASE_URL/$FIRECRACKER_VERSION/firecracker-$FIRECRACKER_VERSION-x86_64.tgz"
+FIRECRACKER_KERNEL_BASE_URL="https://s3.amazonaws.com/spec.ccfc.min"
+FIRECRACKER_KERNEL_BASE_PATH="firecracker-ci/v1.9/x86_64/vmlinux"
+FIRECRACKER_KERNEL_VERSION="6.1.102"
 
 get_firecracker() {
     [ -x firecracker ] && echo Firecracker binary found - skipping download && return
@@ -15,17 +19,22 @@ get_firecracker() {
     rm -rf release-*
 }
 
+get_latest_kernel_file() {
+    echo "$FIRECRACKER_KERNEL_BASE_URL/$(curl "$FIRECRACKER_KERNEL_BASE_URL/?$FIRECRACKER_KERNEL_BASE_PATH-*" | \
+        grep -Po "(?<=<Key>)($FIRECRACKER_KERNEL_BASE_PATH-)[^<]*\d(?=<)" | tail -1)"
+}
+
 get_vmlinux() {
     [ -f vmlinux ] && echo Linux kernel for Firecracker found - skipping download && return
     echo Downloading kernel for Firecracker
-    curl -fL https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.9/x86_64/vmlinux-6.1.96 -o vmlinux
+    curl -fL "$FIRECRACKER_KERNEL_BASE_URL/$FIRECRACKER_KERNEL_BASE_PATH-$FIRECRACKER_KERNEL_VERSION" -o vmlinux
 }
 
 make_rootfs_directory() {
     local rootfs_dir="$1"
     [ -d "$rootfs_dir" ] && echo Rootfs directory "'$rootfs_dir'" found - skipping rootfs directory creation && return
     echo Downloading and extracting rootfs in "'$rootfs_dir'"
-    token=$(curl -sfL "$IMAGE_URL" | jq -r .token)
+    local token=$(curl -sfL "$IMAGE_URL" | jq -r .token)
     mkdir "$rootfs_dir"
     curl -sfL "$MANIFEST_URL" \
         -H "Authorization: Bearer $token" \
