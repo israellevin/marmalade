@@ -1,22 +1,22 @@
 # Marmalade - Musical Collaboration Over a Network in Subjective Real-Time
 
-Music is math over time, and time is tricky - doubly so over a network. Marmalade forgoes the illusion of objective simultaneity, and embraces subjective simultaneity instead. Different observers will experience the events of the same musical session in different ways, and possibly in a different order, according to the flow of their local network, ending up with different and individual experiences. Just as they would if they were playing together in the same room.
+Music is math over time, and time is tricky - doubly so over a network. Marmalade forgoes the illusion of objective simultaneity, and embraces subjective simultaneity instead. Different observers will experience the events of the same musical session in an order that's relative to the speed of the network, ending up with different and individual experiences. Just as they would if they were playing together in the same room.
 
-With Marmalade, there is no central server acting as an objective source of truth. Instead, Marmalade offers a peer-to-peer protocol for composing and playing sounds in a way that is context aware. Each node in the network can publish these compositions, collect them, synchronize them, and play them in a meaningful and hopefully pleasing way.
+With Marmalade, there is no central server acting as an objective source of truth. Instead, Marmalade offers a peer-to-peer protocol for composing and playing sounds in a way that is context aware. Each node in the network can publish these compositions, collect them, synchronize them, interpret and play them in a meaningful and hopefully pleasing way.
 
 ## Core Concepts
 
-A Marmalade jam session is made up of Marmalade audio generators which are sent and received by the nodes of the Marmalade network, referred to as players. These generators are pieces of software, composed by the participants in the jam, which each player runs locally. They query the state of the jam, which is subjective for each player, and determine which sounds to produce accordingly.
+A Marmalade jam session is made up of Marmalade audio generators which are sent and received by the players, who are the nodes of the Marmalade network. These generators are pieces of software, composed by the participants in the jam, which each player runs locally. They query the state of the jam, which is subjective locally for each player, and determine which sounds to produce when.
 
-In addition, generators can manipulate designated parts of the state called tags, to allow other generators to synchronize with them when they decide what sounds to produce. The state of the jam on a specific player consists of the sate of the local hardware (clock, sound levels, audio setup, network connectivity), the state of the network the jam is being jammed on (number of participating players and their stats), and the tags set by all the generators that the player is playing.
+In addition, generators can manipulate designated parts of the state called tags, to allow other generators to synchronize with them when they decide which sounds to produce. The state of the jam on a specific player consists of the the state of the local hardware (clock, sound levels, audio setup, network connectivity), the state of the network the jam is being jammed on (number of participating players and their stats), and the tags set by all the generators that the player is playing.
 
-For example, a player can start a jam by publishing a generator that plays a drum loop indefinitely, or for a specified duration, or one that plays the loop on every 10th second until the last player has left. This generator can also set and alternating "beat" tag in the state, allowing other generator to sync their audio to it. Another generator can count those "beats", and play a bass note on every 4th beat, or a melody on every 8th beat, adding a "verse" tag to the first and a "chorus" tag to the latter. Yet another generator can listen for the "verse" tag, and play a guitar riff on the second "beat" of every "verse" for ten minutes.
+For example, a player can start a jam by publishing a generator that plays a drum loop indefinitely, or for a specified duration, or one that plays the loop on every 10th second until the last player has left. This generator can also set an alternating "beat" tag in the state, allowing other generator to sync their audio to it. Another generator can count those "beats", group them into "bars", and set a "verse" tag on every 4th bar, and a "chorus" tag on every 8th bar, while playing a bass note on every 4th beat and a melody on every 8th beat of the "chorus". Yet another generator can listen for the "verse" tag, and play a guitar riff on the second "beat" of every "verse".
 
 - `Jam`: a single instance of a musical collaboration session, consisting of a growing collection of generators composed by the participating players. Jams are identified by a name that is unique to all the players participating in the jam.
 - `Player`: a single node participating in a jam, running the required software to handle composition, distribution and collection of generators, and the synchronized playback of the sounds they generate. Each player maintains its own version of the state of the jam. Players are identified by their public key, but for readability we use the first 8 characters of the Base64 encoded SHA-256 "fingerprint" of their public key as an identifier (with 63 represented as `_` instead of the more common `/`, so we can use it in file names). This limits our number of players to 64^8 at this time. Collisions, if they ever occur, will be considered invalid, so only the first player to use a public key with a given fingerprint will be accepted by each player. In the future we may use some kind of hash wordification or identicons to make the player IDs more readable.
-- `State`: the full history of the player, the network and the jam, which is subjective and local to each player. The state is used to determine which sounds to play, when and how.
+- `State`: the full history of the player, the network and the jam, which is subjective and local to each player. The state is used by the generators to determine which sounds to play, when and how.
 D- `Generator`: the fundamental source of music in a jam - a generator is software that produces the right sound for the current state of the jam and sets appropriate tags that other generators can use in making their musical decisions. Generators are identified by a unique ID in the form `<player ID>:<generator name>`, where the name of the generator is unique to that player.
-- `Tags`: attributes of the state which are set by individual generators.
+- `Tags`: attributes of the state which can be set by individual generators.
 
 ## Network Protocol
 
@@ -24,9 +24,13 @@ This is the protocol for communication between players. It allows for the follow
 - `generators`: get a simple list of all generator IDs known to the queried player, in reverse chronological order.
 - `generator <generator ID>`: get the generator with the specified ID as an archive file.
 - `players`: get a list of all players known to the queried player, in reverse chronological order, containing, for each player, the public key identifying the player, their latest known addresses, and when they were last seen.
-- `play <jam name> <generator name> <instance ID> <address> <public key> <signature>`: run the generator with the ID `<querying player ID>:<generator name>`, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel). Because the player ID is generated from the public key, a player can only request for his own generators to be played. The address is the address of the querying player, the public key is the public key identifying him, and the signature is the signature on the query made by the corresponding private key.
+- `play <jam name> <generator name> <instance ID> <address> <public key> <signature>`: run the generator with the ID `<querying player ID>:<generator name>`, but only if it has not been run with the specified instance ID before (this allows for multiple instances of the same generator to be run in parallel, and provides complete protection against replay attacks). Because the player ID is generated from the public key, a player can only request for his own generators to be played. The address is the address of the querying player, the public key is the public key identifying him, and the signature is the signature on the query made by the corresponding private key.
 
 While the first three calls do not change the state of the jam and can therefore be anonymous, the `play` call will, in addition to running the generator, download and deploy the generator if it is not locally present and add it to the list of known generators, and add the querying player to the list of players if it is not already there (along with the public key provided, which will be used to identify the player from that point on). It therefore has to be signed by the querying player and verified by the queried player.
+
+TODO: We should probably add a `stop` call to stop a generator that is currently running. It will be almost identical to the `play` call, but will stop the generator instead of starting it.
+
+TODO: We should provide a way to query the history of the jam, which could easily be done by exposing a few files through the p2p server - namely the Redis persistence files and the audio recording of the jam (which is best served streamed).
 
 ### Cryptographic Details
 
@@ -73,6 +77,8 @@ The state of the jam is kept in a [Redis](https://redis.io/) instance that the p
 
 Redis is fast as hell, setting it up and granting generators access to the state should be a breeze, it has strong publish-subscribe capabilities in case we want to set up events, and it seems to have excellent time series support, which we can easily connect to a graphing tool like [Grafana](https://grafana.com/) and visualize the evolving state of the jam. That would be awesome.
 
+To grant generators access to the full history of the state, generators should be provided with read-only access to the Redis persistence files, and to the audio recording of the jam - probably via the p2p web server.
+
 #### Writing Tags
 
 We give each generator instance write access to its own namespace in the state, in which tags can be written. Theoretically, the player can give a generator instance permissions to set tags in other areas of the state, which could create some sort of meta-generator operations, and cross-over operations, and all sorts of craziness if the need ever arises.
@@ -90,8 +96,10 @@ The generator should be able to produce any kind of audio, synthesized or sample
 - **[cl-patterns](https://github.com/defaultxr/cl-patterns)** is built on top of Supercollider and does it cooler and lispier. Seems a bit immature.
 - **[Tidal Cycles](http://tidalcycles.org)** is also built on top of Supercollider but goes the Haskell way. Seems the most mature.
 - **[Sonic Pi](https://sonic-pi.net/)** is also built on top of Supercollider, is very cool, and although it is built on Ruby it's still something we can learn from.
+- **[ChucK](https://github.com/ccrma/chuck)** is a strongly *timed* audio programming language, and it can work with pretty much any sound architecture, including ALSA. Currently a leading candidate because it's a single binary using a standard library ([STK](https://ccrma.stanford.edu/software/stk/) FTW) and not a fucking eco-system. Also has a built in mechanism for "slave" threads, which can come very handy in giving the local player control over all generators.
+- **[Tone.js](https://tonejs.github.io/)** is another simple and beautiful tool, which works entirely in the browser. Again, with zero IT hassle - assuming you already have sound in your browser.
 
-For all these options we will use Redis pub-sub to deliver the musical notation from generator to player. We can even use Redis's expiration mechanism to avoid playing sounds if the player hasn't gotten around to playing them in time.
+For all these options we can use Redis pub-sub to deliver the musical notation from generator to player. We can even use Redis's expiration mechanism to avoid playing sounds if the player hasn't gotten around to playing them in time.
 
 ### Generator Lifecycle
 
@@ -112,6 +120,7 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
     ...
   jams/
     <jam name>/
+      jam.flac
       jam.log
       <player ID>/
         <generator name>/
@@ -133,6 +142,7 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
     - `<player ID:generator name>.tgz`: a generator archive, containing the generator's files and directories.
 - `jams/` the jams that the player participated in.
     - `<jam name>/`: working directory for a single jam.
+            - `jam.flac`: audio recording of the jam.
             - `jam.log` debug log of the jam.
             - `<player ID>/`: all the generators played by a single player in the jam.
                 - `<generator name>/`: all the instances of single generator played in the jam.
@@ -140,13 +150,13 @@ For all these options we will use Redis pub-sub to deliver the musical notation 
                             - `firecracker.socket`: the socket controlling the generator's VM.
     - `redis/`: a Redis persistence directory for the jam.
         - `auth`: the Redis password for the jam.
-        - `<Redis persistency files>`: the Redis aof and rdb files for the jam. This is the single source of truth for the local state of the jam.
+        - `<Redis persistency files>`: the Redis aof and rdb files for the jam.
 - `players/` contains information about all the players the local player has ever known.
     - `<player ID>.lisp` contains the player's public key, address, and last seen time.
 
 ## Generator Isolation and Communication
 
-Generators are currently just directories with arbitrary executables which the player sticks into a directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, so that each generator gets a full virtual machine to can run stuff on, receiving a quota of CPU and memory, and a connection to Redis through which it can query the state, set tags, and produce audio.
+Generators are currently just directories with arbitrary executables which the player sticks into a directory inside a [Firecracker microVM](https://firecracker-microvm.github.io/) running a lightweight linux distro, so that each generator gets a full virtual machine to can run stuff on, receiving a quota of CPU and memory, and a connection to Redis through which it can query the state, set tags, and produce audio. Note that we can't bridge the sound card to Firecracker via PCI, like you can do with QEMU, but we're not going that path anyway. If we need to, our setup easily translates to QEMU (just add a kernel and an initrd), or, with a bit more work, to LXC (by adding a container image, I guess).
 
 TODO: We don't have quota's set on the Firecracker configuration.
 
@@ -223,6 +233,9 @@ Currently, the player supports only commands to start and stop the jam, to creat
 - Controlling the tempo of the jam (which includes the ability to pause it)
 - A GUI, probably web-based, instead of the REPL
 - Visualizing the state of the jam, the generators and the tags; both in real-time and historically
+- Adding a `stop` command to stop a generator that is currently running
+- Adding a `history` command to query the history of the jam
+- Recording the audio of the jam and making it available for download or streaming (best record all channels, including microphones and such)
 
 In addition, there is a bunch of data that the local player should push into the state.
 
@@ -236,14 +249,14 @@ Maybe we create an evolving potential structure of a jam, represented as a direc
 
 ### Events
 
-Maybe we want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state, and Redis has great pub-sub support.
+We want to allow generators to subscribe to events in the jam, such as the start of a new context, the end of a track, or the end of the jam. This could be handy for generators that need to know when to start or stop producing audio, or when to change the way they produce audio, without explicitly polling the state. This can be implemented directly with Redis channels, which support pub-sub operations.
 
-Specifically, it seems that a some sort of "wait untill the state is X" operation can come in real handy, and easily be implemented with a pub-sub mechanism - with or without the local player's assistance.
+Specifically, it seems that some sort of "wait until the state is X" operation can come in real handy.
 
 ### Permissioned Operations
 
-Maybe some audio related operations should be restricted, or even completely disabled. For example, assuming we are using something like Tidal to produce audio, we will probably need to restrict the `hush` operation, which stops all audio, and `setcps`, which changes the tempo of the entire jam.
+Most audio production languages assume that the user is the master of the system, and can do whatever they want. This is not the case in Marmalade. It seems silly to let every generator mute every other generator, or change the tempo of the entire jam. In general, we want to be able to prevent generators from affecting other generators directly.
 
-However, maybe we will want to allow certain generators - an obvious candidate being the generators of the local player that's actually running the jam - to perform such restricted operations.
+However, maybe we will want to allow certain generators - an obvious candidate being the generators of the local player - to perform such restricted operations.
 
-In the same way, generators should generally be able to set tags only in their own namespace, but maybe we will want to allow certain generators to set tags in other namespaces, or even in the root namespace.
+In the same way, generators should generally be able to set tags only in their own namespace, but maybe we will want to allow certain generators to set tags in other namespaces (e.g. if they belongi to the same player), or even in the root namespace (e.g. if they belong to the local player).
